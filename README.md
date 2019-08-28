@@ -7,5 +7,4 @@
 [![Codecov](https://codecov.io/gh/roax/roax-postgresql/branch/master/graph/badge.svg)](https://codecov.io/gh/roax/roax-postgresql)
 [![Black](https://img.shields.io/badge/code%20style-black-black.svg)](https://github.com/psf/black)
 
-Roax-PostgreSQL<br />
 PostgreSQL extension for Roax. 
