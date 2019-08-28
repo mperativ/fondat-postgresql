@@ -2,7 +2,6 @@
 
 [![PyPI](https://badge.fury.io/py/roax-postgresql.svg)](https://badge.fury.io/py/roax-postgresql)
 [![License](https://img.shields.io/github/license/roax/roax-postgresql.svg)](https://github.com/roax/roax-postgresql/blob/master/LICENSE)
-[![Python](https://img.shields.io/pypi/pyversions/roax-postgresql.svg)](https://pypi.org/project/roax-postgresql/)
 [![GitHub](https://img.shields.io/badge/github-master-blue.svg)](https://github.com/roax/roax-postgresql/)
 [![Travis CI](https://travis-ci.org/roax/roax-postgresql.svg?branch=master)](https://travis-ci.org/roax/roax-postgresql)
 [![Codecov](https://codecov.io/gh/roax/roax-postgresql/branch/master/graph/badge.svg)](https://codecov.io/gh/roax/roax-postgresql)
