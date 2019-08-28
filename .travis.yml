@@ -1,0 +1,28 @@
+os: linux
+
+language: python
+
+dist: bionic 
+
+python:
+    - 3.6
+    - 3.7
+
+services:
+    - postgresql
+
+before_install:
+    - pip install poetry
+
+install:
+    - poetry install -v
+    - pip install codecov
+
+before_script:
+    - psql -c "create database test;" -U postgres
+
+script:
+    - pytest --cov=roax --cov-report=xml tests/
+
+after_success:
+    - codecov
