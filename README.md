@@ -1,4 +1,4 @@
-# roax-postgres
+# roax-postgresql
 
 [![PyPI](https://badge.fury.io/py/roax-postgresql.svg)](https://badge.fury.io/py/roax-postgresql)
 [![License](https://img.shields.io/github/license/roax/roax-postgresql.svg)](https://github.com/roax/roax-postgresql/blob/master/LICENSE)
