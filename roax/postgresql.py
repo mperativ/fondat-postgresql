@@ -53,6 +53,7 @@ _text = _TextCodec()
 
 _codecs = {
     s.dict: _json,
+    s.str: _pass,
     s.list: _json,
     s.set: _json,
     s.int: _pass,
