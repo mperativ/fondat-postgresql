@@ -12,6 +12,7 @@ addons:
         packages:
             - postgresql-11
             - postgresql-client-11
+
 before_install:
     - pip install poetry
 
@@ -20,7 +21,6 @@ install:
     - pip install codecov
 
 before_script:
-    - sudo systemctl start postgresql
     - psql -c 'create database roax_postgresql;' -U postgres
 
 script:
