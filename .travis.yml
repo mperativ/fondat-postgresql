@@ -1,17 +1,12 @@
 os: linux
 
+distro: disco
+
 language: python
 
 python:
     - 3.6
     - 3.7
-
-addons:
-    postgresql: "11"
-    apt:
-        packages:
-            - postgresql-11
-            - postgresql-client-11
 
 before_install:
     - pip install poetry
