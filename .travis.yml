@@ -6,9 +6,6 @@ python:
     - 3.6
     - 3.7
 
-services:
-    - postgresql
-
 addons:
     postgresql: "11"
     apt:
@@ -23,6 +20,7 @@ install:
     - pip install codecov
 
 before_script:
+    - sudo systemctl start postgresql
     - psql -c 'create database roax_postgresql;' -U postgres
 
 script:
