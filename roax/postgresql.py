@@ -13,7 +13,7 @@ import threading
 _logger = logging.getLogger(__name__)
 
 
-class _JSONCodec:
+class _JSONAdapter:
     def encode(self, schema, value):
         return json.dumps(schema.json_encode(value))
 
@@ -21,15 +21,7 @@ class _JSONCodec:
         return schema.json_decode(value)
 
 
-class _TextCodec:
-    def encode(self, schema, value):
-        return schema.str_encode(value)
-
-    def decode(self, schema, value):
-        return schema.str_decode(value)
-
-
-class _PassCodec:
+class _PassAdapter:
     def encode(self, schema, value):
         return value
 
@@ -37,7 +29,7 @@ class _PassCodec:
         return value
 
 
-class _BytesCodec:
+class _BytesAdapter:
     def encode(self, schema, value):
         return value
 
@@ -45,13 +37,13 @@ class _BytesCodec:
         return bytes(value)
 
 
-_pass = _PassCodec()
-_json = _JSONCodec()
-_bytes = _BytesCodec()
-_text = _TextCodec()
+_pass = _PassAdapter()
+_json = _JSONAdapter()
+_bytes = _BytesAdapter()
+_text = db.Adapter()
 
 
-_codecs = {
+_adapters = {
     s.dict: _json,
     s.str: _pass,
     s.list: _json,
@@ -88,6 +80,7 @@ class Database(db.Database):
         super().__init__(psycopg2)
         self.pool = psycopg2.pool.ThreadedConnectionPool(minconn, maxconn, **kwargs)
         self.local = threading.local()
+        self.adapters = _adapters
 
     @contextlib.contextmanager
     def connect(self):
@@ -119,17 +112,3 @@ class Database(db.Database):
             if not self.local.count:
                 del self.local.connection
                 self.pool.putconn(conn=connection, key=threading.get_ident())
-
-
-class Table(db.Table):
-    """TODO: Description."""
-
-    def __init__(self, name, schema, pk, codecs=None):
-        """
-        :param module: Module that implements the DB-API interface.
-        :param name: Name of table in the SQL database.
-        :param schema: Schema of table columns.
-        :param primary_key: Column name of the primary key.
-        :param codecs: TODO.
-        """
-        super().__init__(name, schema, pk, {**_codecs, **(codecs if codecs else {})})

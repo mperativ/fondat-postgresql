@@ -59,12 +59,12 @@ def database():
 def table(database):
     with database.cursor() as cursor:
         cursor.execute("DELETE FROM FOO;")
-    return postgresql.Table("foo", _schema, "id")
+    return db.Table(database, "foo", _schema, "id")
 
 
 @pytest.fixture()
-def resource(database, table):
-    return db.TableResource(database, table)
+def resource(table):
+    return db.TableResource(table)
 
 
 import datetime
@@ -102,30 +102,30 @@ def test_crud(resource):
         resource.read(body["id"])
 
 
-def test_list(resource):
+def test_list(table, resource):
     count = 10
     for n in range(0, count):
         id = uuid4()
         assert resource.create(id, {"id": id}) == {"id": id}
-    ids = resource.list()
+    ids = table.list()
     assert len(ids) == count
     for id in ids:
         resource.delete(id)
-    assert len(resource.list()) == 0
+    assert len(table.list()) == 0
 
 
-def test_list_where(resource):
+def test_list_where(table, resource):
     for n in range(0, 20):
         id = uuid4()
         assert resource.create(id, {"id": id, "int": n}) == {"id": id}
-    where = resource.query()
+    where = table.query()
     where.text("int < ")
-    where.param(resource.table.encode("int", 10))
-    ids = resource.list(where=where)
+    where.value("int", 10)
+    ids = table.list(where=where)
     assert len(ids) == 10
-    for id in resource.list():
+    for id in table.list():
         resource.delete(id)
-    assert len(resource.list()) == 0
+    assert len(table.list()) == 0
 
 
 def test_delete_NotFound(resource):
@@ -133,17 +133,17 @@ def test_delete_NotFound(resource):
         resource.delete(uuid4())
 
 
-def test_rollback(resource):
-    assert len(resource.list()) == 0
+def test_rollback(database, table, resource):
+    assert len(table.list()) == 0
     try:
-        with resource.connect():  # transaction demarcation
+        with database.connect():  # transaction demarcation
             id = uuid4()
             resource.create(id, {"id": id})
-            assert len(resource.list()) == 1
+            assert len(table.list()) == 1
             raise RuntimeError  # force rollback
     except RuntimeError:
         pass
-    assert len(resource.list()) == 0
+    assert len(table.list()) == 0
 
 
 def test_nested_connect(database):
@@ -154,15 +154,15 @@ def test_nested_connect(database):
             assert c1 == c3
 
 
-def test_nested_connect_rollback(resource):
-    assert len(resource.list()) == 0
+def test_nested_connect_rollback(database, table, resource):
+    assert len(table.list()) == 0
     id = uuid4()
     try:
-        with resource.database.connect() as c1:  # transaction demarcation
-            with resource.database.connect() as c2:
+        with database.connect() as c1:  # transaction demarcation
+            with database.connect() as c2:
                 resource.create(id, {"id": id})
-                assert len(resource.list()) == 1
+                assert len(table.list()) == 1
                 raise RuntimeError  # force rollback
     except RuntimeError:
         pass
-    assert len(resource.list()) == 0
+    assert len(table.list()) == 0
