@@ -1,4 +1,4 @@
-# roax-postgresql
+# Roax-PostgreSQL
 
 [![PyPI](https://badge.fury.io/py/roax-postgresql.svg)](https://badge.fury.io/py/roax-postgresql)
 [![License](https://img.shields.io/github/license/roax/roax-postgresql.svg)](https://github.com/roax/roax-postgresql/blob/master/LICENSE)
@@ -7,4 +7,17 @@
 [![Codecov](https://codecov.io/gh/roax/roax-postgresql/branch/master/graph/badge.svg)](https://codecov.io/gh/roax/roax-postgresql)
 [![Black](https://img.shields.io/badge/code%20style-black-black.svg)](https://github.com/psf/black)
 
-PostgreSQL extension for Roax. 
+Roax-PostgreSQL: PostgreSQL extension for Roax. 
+
+## Develop
+
+```
+poetry install
+poetry run pre-commit install
+```
+
+## Test
+
+```
+poetry run pytest
+```

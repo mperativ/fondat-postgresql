@@ -59,24 +59,9 @@ _adapters = {
 
 
 class Database(db.Database):
-    """TODO: Description."""
+    """Manages connections to a PostgreSQL database."""
 
     def __init__(self, minconn, maxconn, **kwargs):
-        """
-        :param minconn: TODO.
-        :param maxconn: TODO.
-
-        Connection keyword arguments are also supported. Some of them are:
-        :param host: TODO.
-        :param port: TODO.
-        :param dbname: TODO.
-        :param user: TODO.
-        :param password: TODO.
-        :param sslmode: TODO.
-        :param sslrootcert: TODO.
-        :param sslcert: TODO.
-        :param sslkey: TODO.
-        """
         super().__init__(psycopg2)
         self.pool = psycopg2.pool.ThreadedConnectionPool(minconn, maxconn, **kwargs)
         self.local = threading.local()
