@@ -9,7 +9,7 @@ target-version = ['py36', 'py37', 'py38']
 [tool.poetry]
 name = "roax-postgresql"
 module = "roax.postgresql"
-version = "1.1.0"
+version = "1.1.1"
 description = "PostgreSQL extension for Roax."
 readme = "README.md"
 authors = ["Paul Bryan <pbryan@anode.ca>"]
