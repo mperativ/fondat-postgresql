@@ -44,6 +44,7 @@ _text = db.Adapter()
 
 
 _adapters = {
+    s.dataclass: _json,
     s.dict: _json,
     s.str: _pass,
     s.list: _json,

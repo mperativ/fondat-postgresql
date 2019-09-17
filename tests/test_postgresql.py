@@ -1,3 +1,4 @@
+import dataclasses
 import pytest
 import roax.db as db
 import roax.postgresql as postgresql
@@ -12,21 +13,23 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-_schema = s.dict(
-    {
-        "id": s.uuid(),
-        "str": s.str(),
-        "dict": s.dict({"a": s.int()}),
-        "list": s.list(s.int()),
-        "set": s.set(s.str()),
-        "int": s.int(),
-        "float": s.float(),
-        "bool": s.bool(),
-        "bytes": s.bytes(format="binary"),
-        "date": s.date(),
-        "datetime": s.datetime(),
-    }
-)
+
+@dataclasses.dataclass
+class DC:
+    id: s.uuid()
+    str: s.str()
+    dict: s.dict({"a": s.int()})
+    list: s.list(s.int())
+    set: s.set(s.str())
+    int: s.int()
+    float: s.float()
+    bool: s.bool()
+    bytes: s.bytes(format="binary")
+    date: s.date()
+    datetime: s.datetime()
+
+
+_schema = s.dataclass(DC)
 
 
 @pytest.fixture(scope="module")
@@ -71,42 +74,54 @@ import datetime
 
 
 def test_crud(resource):
-    body = {
-        "id": uuid4(),
-        "str": "string",
-        "dict": {"a": 1},
-        "list": [1, 2, 3],
-        "set": {"foo", "bar"},
-        "int": 1,
-        "float": 2.3,
-        "bool": True,
-        "bytes": b"12345",
-        "date": s.date().str_decode("2019-01-01"),
-        "datetime": s.datetime().str_decode("2019-01-01T01:01:01Z"),
-    }
-    resource.create(body["id"], body)
-    assert resource.read(body["id"]) == body
-    body["dict"] = {"a": 2}
-    body["list"] = [2, 3, 4]
-    del body["set"]
-    body["int"] = 2
-    body["float"] = 1.0
-    body["bool"] = False
-    del body["bytes"]
-    del body["date"]
-    #   del body["datetime"]
-    resource.update(body["id"], body)
-    assert resource.read(body["id"]) == body
-    resource.delete(body["id"])
+    body = DC(
+        id=uuid4(),
+        str="string",
+        dict={"a": 1},
+        list=[1, 2, 3],
+        set={"foo", "bar"},
+        int=1,
+        float=2.3,
+        bool=True,
+        bytes=b"12345",
+        date=s.date().str_decode("2019-01-01"),
+        datetime=s.datetime().str_decode("2019-01-01T01:01:01Z"),
+    )
+    resource.create(body.id, body)
+    assert resource.read(body.id) == body
+    body.dict = {"a": 2}
+    body.list = [2, 3, 4]
+    body.set = None
+    body.int = 2
+    body.float = 1.0
+    body.bool = False
+    body.bytes = None
+    body.date = None
+    resource.update(body.id, body)
+    assert resource.read(body.id) == body
+    resource.delete(body.id)
     with pytest.raises(NotFound):
-        resource.read(body["id"])
+        resource.read(body.id)
 
 
 def test_list(table, resource):
     count = 10
     for n in range(0, count):
         id = uuid4()
-        assert resource.create(id, {"id": id}) == {"id": id}
+        body = DC(
+            id=id,
+            str=None,
+            dict=None,
+            list=None,
+            set=None,
+            int=None,
+            float=None,
+            bool=None,
+            bytes=None,
+            date=None,
+            datetime=None,
+        )
+        assert resource.create(id, body) == {"id": id}
     ids = table.list()
     assert len(ids) == count
     for id in ids:
@@ -117,7 +132,20 @@ def test_list(table, resource):
 def test_list_where(table, resource):
     for n in range(0, 20):
         id = uuid4()
-        assert resource.create(id, {"id": id, "int": n}) == {"id": id}
+        body = DC(
+            id=id,
+            str=None,
+            dict=None,
+            list=None,
+            set=None,
+            int=n,
+            float=None,
+            bool=None,
+            bytes=None,
+            date=None,
+            datetime=None,
+        )
+        assert resource.create(id, body) == {"id": id}
     where = table.query()
     where.text("int < ")
     where.value("int", 10)
@@ -137,8 +165,20 @@ def test_rollback(database, table, resource):
     assert len(table.list()) == 0
     try:
         with database.connect():  # transaction demarcation
-            id = uuid4()
-            resource.create(id, {"id": id})
+            body = DC(
+                id=uuid4(),
+                str=None,
+                dict=None,
+                list=None,
+                set=None,
+                int=None,
+                float=None,
+                bool=None,
+                bytes=None,
+                date=None,
+                datetime=None,
+            )
+            resource.create(body.id, body)
             assert len(table.list()) == 1
             raise RuntimeError  # force rollback
     except RuntimeError:
@@ -156,11 +196,23 @@ def test_nested_connect(database):
 
 def test_nested_connect_rollback(database, table, resource):
     assert len(table.list()) == 0
-    id = uuid4()
     try:
         with database.connect() as c1:  # transaction demarcation
             with database.connect() as c2:
-                resource.create(id, {"id": id})
+                body = DC(
+                    id=uuid4(),
+                    str=None,
+                    dict=None,
+                    list=None,
+                    set=None,
+                    int=None,
+                    float=None,
+                    bool=None,
+                    bytes=None,
+                    date=None,
+                    datetime=None,
+                )
+                resource.create(body.id, body)
                 assert len(table.list()) == 1
                 raise RuntimeError  # force rollback
     except RuntimeError:
