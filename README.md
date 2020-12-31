@@ -1,13 +1,12 @@
-# Roax-PostgreSQL
+# Fondat-Postgres
 
-[![PyPI](https://badge.fury.io/py/roax-postgresql.svg)](https://badge.fury.io/py/roax-postgresql)
-[![License](https://img.shields.io/github/license/roax/roax-postgresql.svg)](https://github.com/roax/roax-postgresql/blob/master/LICENSE)
-[![GitHub](https://img.shields.io/badge/github-master-blue.svg)](https://github.com/roax/roax-postgresql/)
-[![Travis CI](https://travis-ci.org/roax/roax-postgresql.svg?branch=master)](https://travis-ci.org/roax/roax-postgresql)
-[![Codecov](https://codecov.io/gh/roax/roax-postgresql/branch/master/graph/badge.svg)](https://codecov.io/gh/roax/roax-postgresql)
+[![PyPI](https://badge.fury.io/py/fondat-postgres.svg)](https://badge.fury.io/py/fondat-postgres)
+[![License](https://img.shields.io/github/license/fondat/fondat-postgres.svg)](https://github.com/fondat/fondat-postgres/blob/main/LICENSE)
+[![GitHub](https://img.shields.io/badge/github-main-blue.svg)](https://github.com/fondat/fondat-postgres/)
+[![Test](https://github.com/fondat/fondat-postgres/workflows/test/badge.svg)](https://github.com/fondat/fondat-postgres/actions?query=workflow/test)
 [![Black](https://img.shields.io/badge/code%20style-black-black.svg)](https://github.com/psf/black)
 
-Roax-PostgreSQL: PostgreSQL extension for Roax. 
+PostgreSQL module for Fondat. 
 
 ## Develop
 
