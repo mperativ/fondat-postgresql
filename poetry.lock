@@ -135,7 +135,7 @@ python-versions = "*"
 
 [[package]]
 name = "fondat-core"
-version = "3.0a3"
+version = "3.0a6"
 description = "A foundation for Python resource-oriented applications."
 category = "main"
 optional = false
@@ -149,7 +149,7 @@ wrapt = ">=1.12,<2.0"
 
 [[package]]
 name = "identify"
-version = "1.5.10"
+version = "1.5.11"
 description = "File identification library for Python"
 category = "dev"
 optional = false
@@ -379,7 +379,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "9c8a12f4b055dcf0618023b5b829e51957a74f8eeac0606263646fe12654da79"
+content-hash = "fa08f7e66b90da3712a166f90f56c25e40b704d1301f523655936170072c4f22"
 
 [metadata.files]
 aiofiles = [
@@ -504,12 +504,12 @@ filelock = [
     {file = "filelock-3.0.12.tar.gz", hash = "sha256:18d82244ee114f543149c66a6e0c14e9c4f8a1044b5cdaadd0f82159d6a6ff59"},
 ]
 fondat-core = [
-    {file = "fondat-core-3.0a3.tar.gz", hash = "sha256:f5ee34392e396437ea029e8f198abdb7bcb6e8f0df716d7a1c70d3ad58732b64"},
-    {file = "fondat_core-3.0a3-py3-none-any.whl", hash = "sha256:5b200688564d0a2030a028089c153a99db48f92b7fdd1a838964907785cc41fd"},
+    {file = "fondat-core-3.0a6.tar.gz", hash = "sha256:c02af126fa1692589629e1a5a99d0ac600525e9b3866fd0418ac5e31646e6ef1"},
+    {file = "fondat_core-3.0a6-py3-none-any.whl", hash = "sha256:8e8e3fae6e9972be577c29d3724d52a23fa5e29b059fc16a13b158df97103f91"},
 ]
 identify = [
-    {file = "identify-1.5.10-py2.py3-none-any.whl", hash = "sha256:cc86e6a9a390879dcc2976cef169dd9cc48843ed70b7380f321d1b118163c60e"},
-    {file = "identify-1.5.10.tar.gz", hash = "sha256:943cd299ac7f5715fcb3f684e2fc1594c1e0f22a90d15398e5888143bd4144b5"},
+    {file = "identify-1.5.11-py2.py3-none-any.whl", hash = "sha256:7aef7a5104d6254c162990e54a203cdc0fd202046b6c415bd5d636472f6565c4"},
+    {file = "identify-1.5.11.tar.gz", hash = "sha256:b2c71bf9f5c482c389cef816f3a15f1c9d7429ad70f497d4a2e522442d80c6de"},
 ]
 iniconfig = [
     {file = "iniconfig-1.1.1-py2.py3-none-any.whl", hash = "sha256:011e24c64b7f47f6ebd835bb12a743f2fbe9a26d4cecaa7f53bc4f35ee9da8b3"},

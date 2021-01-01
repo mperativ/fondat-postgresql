@@ -2,14 +2,27 @@
 
 import asyncpg
 import contextlib
-import json
-import logging
+import contextvars
 import fondat.codec
 import fondat.sql
-import threading
+import functools
+import json
+import logging
+import typing
+
+from asyncio.exceptions import CancelledError
+from collections.abc import AsyncIterator, Iterable
+from datetime import date, datetime
+from decimal import Decimal
+from fondat.sql import Statement
+from fondat.validate import validate_arguments
+from typing import Annotated, Any, Literal, Optional, Union
+from uuid import UUID
 
 
 _logger = logging.getLogger(__name__)
+
+NoneType = type(None)
 
 
 class PostgresCodec(fondat.codec.Codec[fondat.codec.F, Any]):
@@ -20,7 +33,7 @@ codec_providers = []
 
 
 @functools.cache
-def get_codec(python_type):
+def get_codec(python_type) -> PostgresCodec:
     """Return a codec compatible with the specified Python type."""
 
     if typing.get_origin(python_type) is Annotated:
@@ -157,17 +170,19 @@ def _jsonb_codec_provider(python_type):
 
 
 class _Results(AsyncIterator[Any]):
-    def __init__(self, results, result_type):
+    def __init__(self, statement, results):
+        self.statement = statement
         self.results = results
-        self.result_type = result_type
-        self.codecs = {k: get_codec(t) for k, t in results.__annotations__}
+        self.codecs = {
+            k: get_codec(t) for k, t in typing.get_type_hints(statement.result, include_extras=True).items()
+        }
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
 
     async def __anext__(self):
-        row = await results.__anext__()
-        return self.result_type(
+        row = await self.results.__anext__()
+        return self.statement.result(
             **{k: self.codecs[k].decode(row[k]) for k in self.codecs}
         )
 
@@ -184,17 +199,20 @@ class Database(fondat.sql.Database):
     • user: The name of the database role used for authentication.
     • database: The name of the database to connect to.
     • password: Password to be used for authentication.
-    • loop: The asyncio event loop instance.
     • timeout: Connection timeout in seconds.
     """
 
     def __init__(self, **kwargs):
         super().__init__()
-        self.pool = asyncpg.create_pool(**kwargs)
+        self._init_kwargs = kwargs
+        self.pool = None
         self._connection = contextvars.ContextVar("fondat_postgres_connection")
 
     @contextlib.asynccontextmanager
     async def transaction(self):
+
+        if self.pool is None:
+            self.pool = await asyncpg.create_pool(**self._init_kwargs)
 
         connection = self._connection.get(None)
         token = None
@@ -245,6 +263,7 @@ class Database(fondat.sql.Database):
                 await connection.close()
 
     async def execute(self, statement: Statement) -> Optional[AsyncIterator[Any]]:
+
         if not (connection := self._connection.get(None)):
             raise RuntimeError("transaction context required to execute statement")
         text = []
@@ -255,9 +274,12 @@ class Database(fondat.sql.Database):
             else:
                 args.append(get_codec(fragment.python_type).encode(fragment.value))
                 text.append(f"${len(args)}")
-        results = await connection.execute("".join(text), args)
-        if statement.result is not None:  # expecting a result
-            return _Results(results, statement)
+        text = "".join(text)
+        _logger.debug("%s args=%s", text, args)
+        if statement.result is None:
+            await connection.execute(text, *args)
+        else:
+            return _Results(statement, connection.cursor(text, *args).__aiter__())
 
-    def get_codec(self, python_type: Any) -> PostresCodec:
+    def get_codec(self, python_type: Any) -> PostgresCodec:
         return get_codec(python_type)

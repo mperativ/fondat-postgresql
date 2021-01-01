@@ -1,3 +1,3 @@
-The following authors have contributed to Roax-PostgreSQL:
+The following authors have contributed to Fondat-Postgres:
 
 - [Paul Bryan](mailto:pbryan@anode.ca)
