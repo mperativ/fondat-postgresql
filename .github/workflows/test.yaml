@@ -20,6 +20,7 @@ jobs:
       with:
         postgresql version: '13.1'
         postgresql db: 'fondat-postgres'
+        postgresql user: 'runner'
         postgresql password: 'password'
 
     - name: Setup Python
