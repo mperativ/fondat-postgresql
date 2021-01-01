@@ -12,7 +12,13 @@ jobs:
         python: [3.9]
 
     steps:
+
     - uses: actions/checkout@v2
+
+    - uses: harmon758/postgresql-action@v1
+      with:
+        postgresql version: 'latest'
+        postgresql db: 'fondat-postgres'
 
     - name: Setup Python
       uses: actions/setup-python@v2
