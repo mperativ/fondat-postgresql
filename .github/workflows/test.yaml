@@ -19,9 +19,9 @@ jobs:
       uses: harmon758/postgresql-action@v1
       with:
         postgresql version: '13.1'
-        postgresql db: 'fondat-postgres'
+        postgresql db: 'fondat'
         postgresql user: 'fondat'
-        postgresql password: 'password'
+        postgresql password: 'fondat'
 
     - name: Setup Python
       uses: actions/setup-python@v2

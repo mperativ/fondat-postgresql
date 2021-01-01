@@ -30,7 +30,7 @@ class DC:
 @pytest.fixture(scope="function")  # FIXME: scope to module with event_loop fixture?
 def database():
     yield fondat.postgres.Database(
-        database="fondat-postgres", user="fondat", password="password"
+        database="fondat", user="fondat", password="fondat"
     )
 
 
