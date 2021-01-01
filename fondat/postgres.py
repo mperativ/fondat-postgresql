@@ -58,9 +58,11 @@ def _pass_codec(python_type, sql_type):
         @validate_arguments
         def encode(self, value: python_type) -> python_type:
             return value
+
         @validate_arguments
         def decode(self, value: python_type) -> python_type:
             return value
+
     PassCodec.sql_type = sql_type
     return PassCodec()
 
@@ -174,7 +176,10 @@ class _Results(AsyncIterator[Any]):
         self.statement = statement
         self.results = results
         self.codecs = {
-            k: get_codec(t) for k, t in typing.get_type_hints(statement.result, include_extras=True).items()
+            k: get_codec(t)
+            for k, t in typing.get_type_hints(
+                statement.result, include_extras=True
+            ).items()
         }
 
     def __aiter__(self):
