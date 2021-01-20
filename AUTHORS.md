@@ -1,3 +1,3 @@
-The following authors have contributed to Fondat-Postgres:
+The following authors have contributed to fondat-postgresql:
 
 - [Paul Bryan](mailto:pbryan@anode.ca)
