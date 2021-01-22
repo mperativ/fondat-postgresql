@@ -25,7 +25,7 @@ _logger = logging.getLogger(__name__)
 NoneType = type(None)
 
 
-class PostgresCodec(fondat.codec.Codec[fondat.codec.F, Any]):
+class PostgreSQLCodec(fondat.codec.Codec[fondat.codec.F, Any]):
     """Base class for PostgreSQL codecs."""
 
 
@@ -33,7 +33,7 @@ codec_providers = []
 
 
 @functools.cache
-def get_codec(python_type) -> PostgresCodec:
+def get_codec(python_type) -> PostgreSQLCodec:
     """Return a codec compatible with the specified Python type."""
 
     if typing.get_origin(python_type) is Annotated:
@@ -54,7 +54,7 @@ def _codec_provider(wrapped=None):
 
 
 def _pass_codec(python_type, sql_type):
-    class PassCodec(PostgresCodec[python_type]):
+    class PassCodec(PostgreSQLCodec[python_type]):
         @validate_arguments
         def encode(self, value: python_type) -> python_type:
             return value
@@ -88,7 +88,39 @@ _pass_codec_provider("timestamp with time zone", datetime)
 _pass_codec_provider("uuid", UUID)
 
 
-# TODO: Enum
+def _issubclass(cls, cls_or_tuple):
+    try:
+        return issubclass(cls, cls_or_tuple)
+    except:
+        return False
+
+
+@_codec_provider
+def _iterable_codec_provider(python_type):
+
+    origin = typing.get_origin(python_type)
+    if not origin or not _issubclass(origin, Iterable):
+        return
+
+    args = typing.get_args(python_type)
+    if not args or len(args) > 1:
+        return
+
+    codec = get_codec(args[0])
+
+    class IterableCodec(PostgreSQLCodec[python_type]):
+
+        sql_type = f"{codec.sql_type}[]"
+
+        @validate_arguments
+        def encode(self, value: python_type) -> Any:
+            return [codec.encode(v) for v in value] 
+
+        @validate_arguments
+        def decode(self, value: Any) -> python_type:
+            return python_type(codec.decode(v) for v in value)
+
+    return IterableCodec()
 
 
 @_codec_provider
@@ -112,7 +144,7 @@ def _union_codec_provider(python_type):
         else jsonb_provider(python_type)
     )
 
-    class UnionCodec(PostgresCodec[python_type]):
+    class UnionCodec(PostgreSQLCodec[python_type]):
 
         sql_type = codec.sql_type
 
@@ -156,7 +188,7 @@ def _jsonb_codec_provider(python_type):
 
     json_codec = fondat.codec.get_codec(fondat.codec.JSON, python_type)
 
-    class JSONBCodec(PostgresCodec[python_type]):
+    class JSONBCodec(PostgreSQLCodec[python_type]):
 
         sql_type = "jsonb"
 
@@ -211,7 +243,7 @@ class Database(fondat.sql.Database):
         super().__init__()
         self._init_kwargs = kwargs
         self.pool = None
-        self._connection = contextvars.ContextVar("fondat_postgres_connection")
+        self._connection = contextvars.ContextVar("fondat_postgresql_connection")
 
     @contextlib.asynccontextmanager
     async def transaction(self):
@@ -234,13 +266,12 @@ class Database(fondat.sql.Database):
 
         except Exception as e:
 
-            # There is an issue in Python when an asynchronous context manager
-            # is created within an asynchronous generator: if the generator is
-            # not iterated fully, the context manager will not exit until the
-            # event loop cancels the task by raising a CancelledError, long
-            # after the context is assumed to be out of scope. PEP 533 proposes
-            # a solution, but to date has not been implemented. Until there is
-            # a fix, this warning is an attempt to surface the problem.
+            # There is an issue in Python when a context manager is created
+            # within a generator: if the generator is not iterated fully, the
+            # context manager will not exit until the event loop cancels the
+            # task by raising a CancelledError, long after the context is
+            # assumed to be out of scope. Until there is some kind of fix,
+            # this warning is an attempt to surface the problem.
             if type(e) is CancelledError:
                 _logger.warning(
                     "%s",
@@ -286,5 +317,5 @@ class Database(fondat.sql.Database):
         else:
             return _Results(statement, connection.cursor(text, *args).__aiter__())
 
-    def get_codec(self, python_type: Any) -> PostgresCodec:
+    def get_codec(self, python_type: Any) -> PostgreSQLCodec:
         return get_codec(python_type)
