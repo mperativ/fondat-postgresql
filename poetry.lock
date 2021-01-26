@@ -8,7 +8,7 @@ python-versions = "*"
 
 [[package]]
 name = "aiosqlite"
-version = "0.16.0"
+version = "0.16.1"
 description = "asyncio bridge to the standard sqlite3 module"
 category = "main"
 optional = false
@@ -135,7 +135,7 @@ python-versions = "*"
 
 [[package]]
 name = "fondat-core"
-version = "3.0a16"
+version = "3.0b1"
 description = "A foundation for Python resource-oriented applications."
 category = "main"
 optional = false
@@ -254,7 +254,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "pytest"
-version = "6.2.1"
+version = "6.2.2"
 description = "pytest: simple powerful testing with Python"
 category = "dev"
 optional = false
@@ -387,8 +387,8 @@ aiofiles = [
     {file = "aiofiles-0.6.0.tar.gz", hash = "sha256:e0281b157d3d5d59d803e3f4557dcc9a3dff28a4dd4829a9ff478adae50ca092"},
 ]
 aiosqlite = [
-    {file = "aiosqlite-0.16.0-py3-none-any.whl", hash = "sha256:0e5b8465b0b6aa7f2b0a1fa7f3af53216fcea1947f524b658bd4b4696e72f1b7"},
-    {file = "aiosqlite-0.16.0.tar.gz", hash = "sha256:d014ef07fbc523b2d195fc17cf35982285e3220eb73c1068d5df37b569950ea8"},
+    {file = "aiosqlite-0.16.1-py3-none-any.whl", hash = "sha256:1df802815bb1e08a26c06d5ea9df589bcb8eec56e5f3378103b0f9b223c6703c"},
+    {file = "aiosqlite-0.16.1.tar.gz", hash = "sha256:2e915463164efa65b60fd1901aceca829b6090082f03082618afca6fb9c8fdf7"},
 ]
 appdirs = [
     {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
@@ -504,8 +504,8 @@ filelock = [
     {file = "filelock-3.0.12.tar.gz", hash = "sha256:18d82244ee114f543149c66a6e0c14e9c4f8a1044b5cdaadd0f82159d6a6ff59"},
 ]
 fondat-core = [
-    {file = "fondat-core-3.0a16.tar.gz", hash = "sha256:80b890fa76a4b4b581448c9fa9f0b81b76632e970e4c1d5b9c77a184ef349d0c"},
-    {file = "fondat_core-3.0a16-py3-none-any.whl", hash = "sha256:b5f072a161d536b0ef84fa58ff0178f60b21521718e51115fcc3b170b50469b9"},
+    {file = "fondat-core-3.0b1.tar.gz", hash = "sha256:a54db31b53dd68b3cd2ff88dcd280b95ce9ca27b9407dc59c79e6442f5ae2a23"},
+    {file = "fondat_core-3.0b1-py3-none-any.whl", hash = "sha256:ad222bf062e21503bfa04aed036e545f1afa2b7985d5fc001e0da91e56aaa15b"},
 ]
 identify = [
     {file = "identify-1.5.13-py2.py3-none-any.whl", hash = "sha256:9dfb63a2e871b807e3ba62f029813552a24b5289504f5b071dea9b041aee9fe4"},
@@ -587,8 +587,8 @@ pyparsing = [
     {file = "pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1"},
 ]
 pytest = [
-    {file = "pytest-6.2.1-py3-none-any.whl", hash = "sha256:1969f797a1a0dbd8ccf0fecc80262312729afea9c17f1d70ebf85c5e76c6f7c8"},
-    {file = "pytest-6.2.1.tar.gz", hash = "sha256:66e419b1899bc27346cb2c993e12c5e5e8daba9073c1fbce33b9807abc95c306"},
+    {file = "pytest-6.2.2-py3-none-any.whl", hash = "sha256:b574b57423e818210672e07ca1fa90aaf194a4f63f3ab909a2c67ebb22913839"},
+    {file = "pytest-6.2.2.tar.gz", hash = "sha256:9d1edf9e7d0b84d72ea3dbcdfd22b35fb543a5e8f2a60092dd578936bf63d7f9"},
 ]
 pytest-asyncio = [
     {file = "pytest-asyncio-0.14.0.tar.gz", hash = "sha256:9882c0c6b24429449f5f969a5158b528f39bde47dc32e85b9f0403965017e700"},
