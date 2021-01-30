@@ -3,6 +3,7 @@
 import asyncpg
 import contextlib
 import contextvars
+import dataclasses
 import fondat.codec
 import fondat.sql
 import functools
@@ -15,8 +16,9 @@ from collections.abc import AsyncIterator, Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.sql import Statement
+from fondat.types import dataclass
 from fondat.validate import validate_arguments
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated as A, Any, Literal, Optional, Union
 from uuid import UUID
 
 
@@ -36,7 +38,7 @@ codec_providers = []
 def get_codec(python_type) -> PostgreSQLCodec:
     """Return a codec compatible with the specified Python type."""
 
-    if typing.get_origin(python_type) is Annotated:
+    if typing.get_origin(python_type) is typing.Annotated:
         python_type = typing.get_args(python_type)[0]  # strip annotation
 
     for provider in codec_providers:
@@ -114,7 +116,7 @@ def _iterable_codec_provider(python_type):
 
         @validate_arguments
         def encode(self, value: python_type) -> Any:
-            return [codec.encode(v) for v in value] 
+            return [codec.encode(v) for v in value]
 
         @validate_arguments
         def decode(self, value: Any) -> python_type:
@@ -224,6 +226,28 @@ class _Results(AsyncIterator[Any]):
         )
 
 
+# fmt: off
+@dataclass
+class Config:
+    dsn: A[Optional[str], "connection arguments specified using as a single string"]
+    host: A[Optional[str], "database host address"]
+    port: A[Optional[int], "port number to connect to"]
+    user: A[Optional[str], "the name of the database role used for authentication"]
+    database: A[Optional[str], "the name of the database to connect to"]
+    password: A[Optional[str], "password to be used for authentication"]
+    passfile: A[Optional[str], "the name of the file used to store passwords"]
+    timeout: A[Optional[float], "connection timeout in seconds"]
+    ssl: Optional[Literal["disable", "prefer", "require", "verify-ca", "verify-full"]]
+    min_size: A[Optional[int], "number of connections to initialize pool with"]
+    max_size: A[Optional[int], "maximum number of connections in the connection pool"]
+    max_queries: A[Optional[int], "number of queries to replace a connection with a new one"]
+# fmt: on
+
+
+def _asdict(config):
+    return {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+
+
 class Database(fondat.sql.Database):
     """
     Manages access to a PostgreSQL database.
@@ -239,9 +263,9 @@ class Database(fondat.sql.Database):
     • timeout: Connection timeout in seconds.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, config=None, **kwargs):
         super().__init__()
-        self._init_kwargs = kwargs
+        self._kwargs = {**(_asdict(config) if config else {}), **kwargs}
         self.pool = None
         self._connection = contextvars.ContextVar("fondat_postgresql_connection")
 
@@ -249,7 +273,7 @@ class Database(fondat.sql.Database):
     async def transaction(self):
 
         if self.pool is None:
-            self.pool = await asyncpg.create_pool(**self._init_kwargs)
+            self.pool = await asyncpg.create_pool(**self._kwargs)
 
         connection = self._connection.get(None)
         token = None

@@ -27,16 +27,26 @@ class DC:
     datetime_: Optional[datetime]
 
 
+config = fondat.postgresql.Config(
+    database="fondat",
+    user="fondat",
+    password="fondat",
+)
+
+
 @pytest.fixture(scope="function")
 def database():
-    yield fondat.postgresql.Database(
-        database="fondat", user="fondat", password="fondat"
-    )
+    yield fondat.postgresql.Database(config)
 
 
 @pytest.fixture(scope="function")
 async def table(database):
     foo = fondat.sql.Table("foo", database, DC, "key")
+    async with database.transaction():
+        try:
+            await foo.drop()
+        except:
+            pass
     async with database.transaction():
         await foo.create()
     yield foo
