@@ -17,7 +17,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from fondat.sql import Statement
 from fondat.types import dataclass
-from fondat.validate import validate_arguments
+from fondat.validation import validate_arguments
 from typing import Annotated as A, Any, Literal, Optional, Union
 from uuid import UUID
 
@@ -140,11 +140,7 @@ def _union_codec_provider(python_type):
     args = typing.get_args(python_type)
     is_nullable = NoneType in args
     args = [a for a in args if a is not NoneType]
-    codec = (
-        get_codec(args[0])
-        if len(args) == 1  # Optional[T]
-        else jsonb_provider(python_type)
-    )
+    codec = get_codec(args[0]) if len(args) == 1 else jsonb_provider(python_type)  # Optional[T]
 
     class UnionCodec(PostgreSQLCodec[python_type]):
 
@@ -211,9 +207,7 @@ class _Results(AsyncIterator[Any]):
         self.results = results
         self.codecs = {
             k: get_codec(t)
-            for k, t in typing.get_type_hints(
-                statement.result, include_extras=True
-            ).items()
+            for k, t in typing.get_type_hints(statement.result, include_extras=True).items()
         }
 
     def __aiter__(self):
@@ -221,9 +215,7 @@ class _Results(AsyncIterator[Any]):
 
     async def __anext__(self):
         row = await self.results.__anext__()
-        return self.statement.result(
-            **{k: self.codecs[k].decode(row[k]) for k in self.codecs}
-        )
+        return self.statement.result(**{k: self.codecs[k].decode(row[k]) for k in self.codecs})
 
 
 # fmt: off
@@ -271,23 +263,18 @@ class Database(fondat.sql.Database):
 
     @contextlib.asynccontextmanager
     async def transaction(self):
-
         if self.pool is None:
             self.pool = await asyncpg.create_pool(**self._kwargs)
-
         connection = self._connection.get(None)
         token = None
-
         if not connection:
             connection = await self.pool.acquire()
             transaction = connection.transaction()
             _logger.debug("%s", "transaction begin")
             await transaction.start()
             token = self._connection.set(connection)
-
         try:
             yield
-
         except Exception as e:
 
             # There is an issue in Python when a context manager is created
@@ -311,19 +298,16 @@ class Database(fondat.sql.Database):
                 _logger.debug("%s", "transaction rollback")
                 await transaction.rollback()
                 raise
-
         else:
             if token:
                 _logger.debug("%s", "transaction commit")
                 await transaction.commit()
-
         finally:
             if token:
                 self._connection.reset(token)
                 await connection.close()
 
     async def execute(self, statement: Statement) -> Optional[AsyncIterator[Any]]:
-
         if not (connection := self._connection.get(None)):
             raise RuntimeError("transaction context required to execute statement")
         text = []
