@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator, Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.sql import Statement
-from fondat.types import dataclass
+from fondat.types import datacls
 from fondat.validation import validate_arguments
 from typing import Annotated as A, Any, Literal, Optional, Union
 from uuid import UUID
@@ -219,7 +219,7 @@ class _Results(AsyncIterator[Any]):
 
 
 # fmt: off
-@dataclass
+@datacls
 class Config:
     dsn: A[Optional[str], "connection arguments specified using as a single string"]
     host: A[Optional[str], "database host address"]
