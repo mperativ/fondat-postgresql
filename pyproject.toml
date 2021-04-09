@@ -27,12 +27,12 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-fondat-core = "^3.0b44"
+fondat-core = "^3.0b47"
 asyncpg = "^0.21"
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
-pre-commit = "^2.11"
+pre-commit = "^2.12"
 pytest = "^6.2"
 pytest-asyncio = "^0.14"
 pytest-cov = "^2.11"

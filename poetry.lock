@@ -127,7 +127,7 @@ python-versions = "*"
 
 [[package]]
 name = "fondat-core"
-version = "3.0b44"
+version = "3.0b47"
 description = "A foundation for Python resource-oriented applications."
 category = "main"
 optional = false
@@ -213,7 +213,7 @@ dev = ["pre-commit", "tox"]
 
 [[package]]
 name = "pre-commit"
-version = "2.11.1"
+version = "2.12.0"
 description = "A framework for managing and maintaining multi-language pre-commit hooks."
 category = "dev"
 optional = false
@@ -370,7 +370,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "e3da56a3e7f4eae361244dbb33e78fdcf996460435acfe7e8f2e620b24e102f7"
+content-hash = "47e0dbef543b4819975a57080fd7465b60145c1a7e5cc2670a90b2d9751f65ee"
 
 [metadata.files]
 aiosqlite = [
@@ -494,8 +494,8 @@ filelock = [
     {file = "filelock-3.0.12.tar.gz", hash = "sha256:18d82244ee114f543149c66a6e0c14e9c4f8a1044b5cdaadd0f82159d6a6ff59"},
 ]
 fondat-core = [
-    {file = "fondat-core-3.0b44.tar.gz", hash = "sha256:d1548690e99e9a5d19a070f6bf9c9fb35d809972861fb25b4ba7adb39a2e6586"},
-    {file = "fondat_core-3.0b44-py3-none-any.whl", hash = "sha256:4d0137acbc59cde3143a493cc27c0c87b047fbf7eeaaa6037bd83c3c595e0c00"},
+    {file = "fondat-core-3.0b47.tar.gz", hash = "sha256:4c280925929eb0468bc935f0f0ab107efc9dfe4baf5e22374ef03360a9d8daba"},
+    {file = "fondat_core-3.0b47-py3-none-any.whl", hash = "sha256:f4f684695a01bf1d5f155381d6831a74c06f36da2f001bf4af2300b6862368be"},
 ]
 identify = [
     {file = "identify-2.2.2-py2.py3-none-any.whl", hash = "sha256:c7c0f590526008911ccc5ceee6ed7b085cbc92f7b6591d0ee5913a130ad64034"},
@@ -565,8 +565,8 @@ pluggy = [
     {file = "pluggy-0.13.1.tar.gz", hash = "sha256:15b2acde666561e1298d71b523007ed7364de07029219b604cf808bfa1c765b0"},
 ]
 pre-commit = [
-    {file = "pre_commit-2.11.1-py2.py3-none-any.whl", hash = "sha256:94c82f1bf5899d56edb1d926732f4e75a7df29a0c8c092559c77420c9d62428b"},
-    {file = "pre_commit-2.11.1.tar.gz", hash = "sha256:de55c5c72ce80d79106e48beb1b54104d16495ce7f95b0c7b13d4784193a00af"},
+    {file = "pre_commit-2.12.0-py2.py3-none-any.whl", hash = "sha256:029d53cb83c241fe7d66eeee1e24db426f42c858f15a38d20bcefd8d8e05c9da"},
+    {file = "pre_commit-2.12.0.tar.gz", hash = "sha256:46b6ffbab37986c47d0a35e40906ae029376deed89a0eb2e446fb6e67b220427"},
 ]
 py = [
     {file = "py-1.10.0-py2.py3-none-any.whl", hash = "sha256:3b80836aa6d1feeaa108e046da6423ab8f6ceda6468545ae8d02d9d58d18818a"},

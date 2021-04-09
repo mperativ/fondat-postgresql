@@ -15,8 +15,8 @@ from asyncio.exceptions import CancelledError
 from collections.abc import AsyncIterator, Iterable
 from datetime import date, datetime
 from decimal import Decimal
+from fondat.data import datacls
 from fondat.sql import Statement
-from fondat.types import datacls
 from fondat.validation import validate_arguments
 from typing import Annotated as A, Any, Literal, Optional, Union
 from uuid import UUID
