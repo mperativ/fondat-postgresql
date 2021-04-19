@@ -103,7 +103,7 @@ async def test_list(table):
                 datetime_=None,
             )
             await table.insert(body)
-        results = await table.select("key")
+        results = await table.select(columns="key")
         keys = [result["key"] async for result in results]
         assert len(keys) == count
         for key in keys:
@@ -131,7 +131,7 @@ async def test_list_where(table):
         where = Statement()
         where.text("int_ < ")
         where.param(10)
-        results = await table.select("key", where)
+        results = await table.select(columns="key", where=where)
         keys = [result["key"] async for result in results]
         assert len(keys) == 10
         for key in keys:
