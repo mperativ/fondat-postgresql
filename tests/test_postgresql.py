@@ -1,9 +1,12 @@
-import dataclasses
 import pytest
+
+import asyncio
+import dataclasses
 import fondat.postgresql
 import fondat.sql
 
 from datetime import date, datetime
+from fondat.data import make_datacls
 from fondat.sql import Parameter, Statement
 from typing import Optional, TypedDict
 from uuid import UUID, uuid4
@@ -164,3 +167,27 @@ async def test_rollback(database, table):
         pass
     async with database.transaction():
         assert await table.count() == 0
+
+
+def test_consecutive_loop(database):
+    async def select():
+        stmt = Statement()
+        stmt.text("SELECT 1 AS foo;")
+        stmt.result = make_datacls("DC", (("foo", int),))
+        async with database.transaction() as transaction:
+            result = await (await database.execute(stmt)).__anext__()
+            assert result.foo == 1
+    asyncio.run(select())
+    asyncio.run(select())
+
+
+async def test_gather(database):
+    count = 50
+    async def select(n: int):
+        stmt = Statement()
+        stmt.text(f"SELECT {n} AS foo;")
+        stmt.result = make_datacls("DC", (("foo", int),))
+        async with database.transaction() as transaction:
+            result = await (await database.execute(stmt)).__anext__()
+            assert result.foo == n
+    await asyncio.gather(*[select(n) for n in range(0, count)])

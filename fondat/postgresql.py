@@ -218,26 +218,24 @@ class _Results(AsyncIterator[Any]):
         return self.statement.result(**{k: self.codecs[k].decode(row[k]) for k in self.codecs})
 
 
-# fmt: off
 @datacls
 class Config:
-    dsn: A[Optional[str], "connection arguments specified using as a single string"]
     host: A[Optional[str], "database host address"]
     port: A[Optional[int], "port number to connect to"]
     user: A[Optional[str], "the name of the database role used for authentication"]
-    database: A[Optional[str], "the name of the database to connect to"]
     password: A[Optional[str], "password to be used for authentication"]
     passfile: A[Optional[str], "the name of the file used to store passwords"]
+    database: A[Optional[str], "the name of the database to connect to"]
     timeout: A[Optional[float], "connection timeout in seconds"]
     ssl: Optional[Literal["disable", "prefer", "require", "verify-ca", "verify-full"]]
-    min_size: A[Optional[int], "number of connections to initialize pool with"]
-    max_size: A[Optional[int], "maximum number of connections in the connection pool"]
-    max_queries: A[Optional[int], "number of queries to replace a connection with a new one"]
-# fmt: on
 
 
 def _asdict(config):
-    return {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+    return (
+        {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+        if config is not None
+        else {}
+    )
 
 
 class Database(fondat.sql.Database):
@@ -245,8 +243,6 @@ class Database(fondat.sql.Database):
     Manages access to a PostgreSQL database.
 
     Parameters:
-    • min_size: Number of connections the connection pool with be initialized with.
-    • max_size: Maximum number of connections in the connection pool.
     • host: Database host address.
     • port: Port number to connect to at the server host.
     • user: The name of the database role used for authentication.
@@ -257,18 +253,15 @@ class Database(fondat.sql.Database):
 
     def __init__(self, config=None, **kwargs):
         super().__init__()
-        self._kwargs = {**(_asdict(config) if config else {}), **kwargs}
-        self.pool = None
+        self._kwargs = _asdict(config) | kwargs
         self._connection = contextvars.ContextVar("fondat_postgresql_connection")
 
     @contextlib.asynccontextmanager
     async def transaction(self):
-        if self.pool is None:
-            self.pool = await asyncpg.create_pool(**self._kwargs)
         connection = self._connection.get(None)
         token = None
         if not connection:
-            connection = await self.pool.acquire()
+            connection = await asyncpg.connect(**self._kwargs)
             transaction = connection.transaction()
             _logger.debug("%s", "transaction begin")
             await transaction.start()
