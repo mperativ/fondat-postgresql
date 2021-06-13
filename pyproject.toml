@@ -27,7 +27,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-fondat-core = "^3.0b59"
+fondat-core = "^3.0b62"
 asyncpg = "^0.21"
 
 [tool.poetry.dev-dependencies]

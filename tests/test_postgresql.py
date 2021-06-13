@@ -177,12 +177,14 @@ def test_consecutive_loop(database):
         async with database.transaction() as transaction:
             result = await (await database.execute(stmt)).__anext__()
             assert result.foo == 1
+
     asyncio.run(select())
     asyncio.run(select())
 
 
 async def test_gather(database):
     count = 50
+
     async def select(n: int):
         stmt = Statement()
         stmt.text(f"SELECT {n} AS foo;")
@@ -190,4 +192,5 @@ async def test_gather(database):
         async with database.transaction() as transaction:
             result = await (await database.execute(stmt)).__anext__()
             assert result.foo == n
+
     await asyncio.gather(*[select(n) for n in range(0, count)])

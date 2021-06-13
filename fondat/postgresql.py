@@ -50,7 +50,7 @@ def get_codec(python_type) -> PostgreSQLCodec:
 
 def _codec_provider(wrapped=None):
     if wrapped is None:
-        return functools.partial(provider)
+        return functools.partial(_codec_provider)
     codec_providers.append(wrapped)
     return wrapped
 
@@ -140,7 +140,9 @@ def _union_codec_provider(python_type):
     args = typing.get_args(python_type)
     is_nullable = NoneType in args
     args = [a for a in args if a is not NoneType]
-    codec = get_codec(args[0]) if len(args) == 1 else jsonb_provider(python_type)  # Optional[T]
+    codec = (
+        get_codec(args[0]) if len(args) == 1 else _jsonb_codec_provider(python_type)
+    )  # Optional[T]
 
     class UnionCodec(PostgreSQLCodec[python_type]):
 
