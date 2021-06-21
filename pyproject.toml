@@ -8,7 +8,7 @@ target-version = ['py38']
 
 [tool.poetry]
 name = "fondat-postgresql"
-version = "3.0b8"
+version = "3.0b9"
 description = "PostgreSQL module for Fondat."
 readme = "README.md"
 authors = ["fondat-postgresql authors"]
