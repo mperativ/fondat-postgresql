@@ -1,7 +1,7 @@
 """Module to manage resource items in a PostgreSQL database."""
 
+import asyncio
 import asyncpg
-import contextlib
 import contextvars
 import dataclasses
 import fondat.codec
@@ -10,9 +10,11 @@ import functools
 import json
 import logging
 import typing
+import uuid
 
 from asyncio.exceptions import CancelledError
 from collections.abc import AsyncIterator, Iterable
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.data import datacls
@@ -240,6 +242,11 @@ def _asdict(config):
     )
 
 
+@asynccontextmanager
+async def _async_null_context():
+    yield
+
+
 class Database(fondat.sql.Database):
     """
     Manages access to a PostgreSQL database.
@@ -253,57 +260,64 @@ class Database(fondat.sql.Database):
     • timeout: Connection timeout in seconds.
     """
 
+    __slots__ = ("_kwargs", "_conn", "_txn")
+
     def __init__(self, config=None, **kwargs):
         super().__init__()
         self._kwargs = _asdict(config) | kwargs
-        self._connection = contextvars.ContextVar("fondat_postgresql_connection")
+        self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
+        self._txn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
 
-    @contextlib.asynccontextmanager
-    async def transaction(self):
-        connection = self._connection.get(None)
-        token = None
-        if not connection:
-            connection = await asyncpg.connect(**self._kwargs)
-            transaction = connection.transaction()
-            _logger.debug("%s", "transaction begin")
-            await transaction.start()
-            token = self._connection.set(connection)
+    @asynccontextmanager
+    async def connection(self):
+        if self._conn.get(None):  # connection already established
+            yield
+            return
+        _logger.debug("open connection")
+        connection = await asyncpg.connect(**self._kwargs)
+        token = self._conn.set(connection)
         try:
             yield
-        except Exception as e:
-
-            # There is an issue in Python when a context manager is created
-            # within a generator: if the generator is not iterated fully, the
-            # context manager will not exit until the event loop cancels the
-            # task by raising a CancelledError, long after the context is
-            # assumed to be out of scope. Until there is some kind of fix,
-            # this warning is an attempt to surface the problem.
-            if type(e) is CancelledError:
-                _logger.warning(
-                    "%s",
-                    "transaction failed due to CancelledError; "
-                    "possible transaction context in aborted generator?",
-                )
-
-            # A GeneratorExit exception is raised when an explicit attempt
-            # is made to cleanup an asynchronus generator via the aclose
-            # coroutine method. Therefore, such an exception is not cause to
-            # rollback the transaction.
-            if token and not type(e) is GeneratorExit:
-                _logger.debug("%s", "transaction rollback")
-                await transaction.rollback()
-                raise
-        else:
-            if token:
-                _logger.debug("%s", "transaction commit")
-                await transaction.commit()
         finally:
-            if token:
-                self._connection.reset(token)
+            _logger.debug("close connection")
+            self._conn.reset(token)
+            try:
                 await connection.close()
+            except Exception as e:
+                _logger.error(exc_info=e)
+
+    @asynccontextmanager
+    async def transaction(self):
+        txid = uuid.uuid4().hex
+        _logger.debug("transaction begin %s", txid)
+        token = self._txn.set(txid)
+        async with (self.connection() if not self._conn.get() else _async_null_context()):
+            connection = self._conn.get()
+            transaction = connection.transaction()
+            await transaction.start()
+
+            async def commit():
+                _logger.debug("transaction commit %s", txid)
+                await transaction.commit()
+
+            async def rollback():
+                _logger.debug("transaction rollback %s", txid)
+                await transaction.rollback()
+
+            try:
+                yield
+            except GeneratorExit:  # explicit cleanup of asynchronous generator
+                await commit()
+            except Exception:
+                await rollback()
+                raise
+            else:
+                await commit()
+            finally:
+                self._txn.reset(token)
 
     async def execute(self, statement: Statement) -> Optional[AsyncIterator[Any]]:
-        if not (connection := self._connection.get(None)):
+        if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
         text = []
         args = []
@@ -314,11 +328,13 @@ class Database(fondat.sql.Database):
                 args.append(get_codec(fragment.python_type).encode(fragment.value))
                 text.append(f"${len(args)}")
         text = "".join(text)
-        _logger.debug("%s args=%s", text, args)
-        if statement.result is None:
-            await connection.execute(text, *args)
-        else:
-            return _Results(statement, connection.cursor(text, *args).__aiter__())
+        async with (self.transaction() if not self._txn.get() else _async_null_context()):
+            conn = self._conn.get()
+            _logger.debug("%s args=%s", text, args)
+            if statement.result is None:
+                await conn.execute(text, *args)
+            else:  # expecting a result
+                return _Results(statement, conn.cursor(text, *args).__aiter__())
 
     def get_codec(self, python_type: Any) -> PostgreSQLCodec:
         return get_codec(python_type)

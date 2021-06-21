@@ -1,21 +1,22 @@
 import pytest
 
 import asyncio
-import dataclasses
 import fondat.postgresql
-import fondat.sql
+import fondat.sql as sql
+import logging
 
 from datetime import date, datetime
-from fondat.data import make_datacls
-from fondat.sql import Parameter, Statement
+from fondat.data import datacls, make_datacls
 from typing import Optional, TypedDict
 from uuid import UUID, uuid4
 
 
+_logger = logging.getLogger(__name__)
+
 pytestmark = pytest.mark.asyncio
 
 
-@dataclasses.dataclass
+@datacls
 class DC:
     key: UUID
     str_: Optional[str]
@@ -44,12 +45,7 @@ def database():
 
 @pytest.fixture(scope="function")
 async def table(database):
-    foo = fondat.sql.Table("foo", database, DC, "key")
-    async with database.transaction():
-        try:
-            await foo.drop()
-        except:
-            pass
+    foo = sql.Table("foo", database, DC, "key")
     async with database.transaction():
         await foo.create()
     yield foo
@@ -91,20 +87,8 @@ async def test_crud(table):
 async def test_list(table):
     async with table.database.transaction():
         count = 10
-        for n in range(0, count):
-            body = DC(
-                key=uuid4(),
-                str_=None,
-                dict_=None,
-                list_=None,
-                set_=None,
-                int_=None,
-                float_=None,
-                bool_=None,
-                bytes_=None,
-                date_=None,
-                datetime_=None,
-            )
+        for _ in range(0, count):
+            body = DC(key=uuid4())
             await table.insert(body)
         results = await table.select(columns="key")
         keys = [result["key"] async for result in results]
@@ -117,21 +101,9 @@ async def test_list(table):
 async def test_list_where(table):
     async with table.database.transaction():
         for n in range(0, 20):
-            body = DC(
-                key=uuid4(),
-                str_=None,
-                dict_=None,
-                list_=None,
-                set_=None,
-                int_=n,
-                float_=None,
-                bool_=None,
-                bytes_=None,
-                date_=None,
-                datetime_=None,
-            )
+            body = DC(key=uuid4(), int_=n)
             await table.insert(body)
-        where = Statement()
+        where = sql.Statement()
         where.text("int_ < ")
         where.param(10)
         results = await table.select(columns="key", where=where)
@@ -142,55 +114,99 @@ async def test_list_where(table):
         assert await table.count() == 10
 
 
-async def test_rollback(database, table):
-    async with database.transaction():
+async def test_rollback(table):
+    async with table.database.transaction():
         assert await table.count() == 0
     try:
-        async with database.transaction():
-            body = DC(
-                key=uuid4(),
-                str_=None,
-                dict_=None,
-                list_=None,
-                set_=None,
-                int_=None,
-                float_=None,
-                bool_=None,
-                bytes_=None,
-                date_=None,
-                datetime_=None,
-            )
+        async with table.database.transaction():
+            body = DC(key=uuid4())
             await table.insert(body)
             assert await table.count() == 1
             raise RuntimeError  # force rollback
     except RuntimeError:
         pass
-    async with database.transaction():
+    async with table.database.transaction():
         assert await table.count() == 0
 
 
 def test_consecutive_loop(database):
+    @sql.transaction(database=database)
     async def select():
-        stmt = Statement()
+        stmt = sql.Statement()
         stmt.text("SELECT 1 AS foo;")
         stmt.result = make_datacls("DC", (("foo", int),))
-        async with database.transaction() as transaction:
-            result = await (await database.execute(stmt)).__anext__()
-            assert result.foo == 1
+        result = await (await database.execute(stmt)).__anext__()
+        assert result.foo == 1
 
     asyncio.run(select())
     asyncio.run(select())
 
 
 async def test_gather(database):
-    count = 50
-
     async def select(n: int):
-        stmt = Statement()
-        stmt.text(f"SELECT {n} AS foo;")
-        stmt.result = make_datacls("DC", (("foo", int),))
-        async with database.transaction() as transaction:
-            result = await (await database.execute(stmt)).__anext__()
-            assert result.foo == n
+        async with database.transaction():
+            stmt = sql.Statement()
+            stmt.text(f"SELECT {n} AS foo;")
+            stmt.result = make_datacls("DC", (("foo", int),))
+            async with database.transaction() as transaction:
+                result = await (await database.execute(stmt)).__anext__()
+                assert result.foo == n
 
-    await asyncio.gather(*[select(n) for n in range(0, count)])
+    await asyncio.gather(*[select(n) for n in range(0, 50)])
+
+
+async def test_nested_transaction(table):
+    async with table.database.transaction():
+        assert await table.count() == 0
+        await table.insert(DC(key=uuid4()))
+        assert await table.count() == 1
+        try:
+            async with table.database.transaction():
+                await table.insert(DC(key=uuid4()))
+                assert await table.count() == 2
+                raise RuntimeError
+        except RuntimeError:
+            pass
+        assert await table.count() == 1
+
+
+async def test_no_connecton(database):
+    stmt = sql.Statement()
+    stmt.text(f"SELECT 1;")
+    with pytest.raises(RuntimeError):
+        await database.execute(stmt)
+
+
+async def test_no_transaction(database):
+    async with database.connection():
+        stmt = sql.Statement()
+        stmt.text(f"SELECT 1;")
+        with pytest.raises(RuntimeError):
+            await database.execute(stmt)
+
+
+async def connection_decorator(table):
+    @sql.connection
+    async def foo():
+        key = uuid4()
+        await table.insert(DC(key=key))
+        assert await table.read(key)
+
+    await foo()
+
+
+async def transaction_decorator(table):
+    key = uuid4()
+
+    @sql.transaction
+    async def foo():
+        await table.insert(DC(key=key))
+        assert await table.read(key) is not None
+        raise RuntimeError  # rollback
+
+    try:
+        await foo()
+    except RuntimeError:
+        pass
+    async with table.database.transaction():
+        assert table.read(key) is None
