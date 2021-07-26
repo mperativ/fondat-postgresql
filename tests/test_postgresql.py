@@ -53,6 +53,34 @@ async def table(database):
         await foo.drop()
 
 
+async def test_database_config_dataclass():
+    database = fondat.postgresql.Database(config=config)
+    async with database.transaction():
+        stmt = sql.Statement()
+        stmt.text(f"SELECT 1;")
+        await database.execute(stmt)
+
+
+async def test_database_config_function():
+    def config_fn():
+        return config
+    database = fondat.postgresql.Database(config=config_fn)
+    async with database.transaction():
+        stmt = sql.Statement()
+        stmt.text(f"SELECT 1;")
+        await database.execute(stmt)
+
+
+async def test_database_config_coroutine_function():
+    async def config_corofn():
+        return config
+    database = fondat.postgresql.Database(config=config_corofn)
+    async with database.transaction():
+        stmt = sql.Statement()
+        stmt.text(f"SELECT 1;")
+        await database.execute(stmt)
+
+
 async def test_crud(table):
     async with table.database.transaction():
         body = DC(
@@ -170,7 +198,7 @@ async def test_nested_transaction(table):
         assert await table.count() == 1
 
 
-async def test_no_connecton(database):
+async def test_no_connection(database):
     stmt = sql.Statement()
     stmt.text(f"SELECT 1;")
     with pytest.raises(RuntimeError):

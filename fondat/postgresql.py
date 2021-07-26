@@ -5,6 +5,7 @@ import asyncpg
 import contextvars
 import dataclasses
 import fondat.codec
+import fondat.error
 import fondat.sql
 import functools
 import json
@@ -12,15 +13,14 @@ import logging
 import typing
 import uuid
 
-from asyncio.exceptions import CancelledError
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.data import datacls
 from fondat.sql import Statement
-from fondat.validation import validate_arguments
-from typing import Annotated as A, Any, Literal, Optional, Union
+from fondat.validation import validate, validate_arguments
+from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
 
@@ -224,22 +224,15 @@ class _Results(AsyncIterator[Any]):
 
 @datacls
 class Config:
-    host: A[Optional[str], "database host address"]
-    port: A[Optional[int], "port number to connect to"]
-    user: A[Optional[str], "the name of the database role used for authentication"]
-    password: A[Optional[str], "password to be used for authentication"]
-    passfile: A[Optional[str], "the name of the file used to store passwords"]
-    database: A[Optional[str], "the name of the database to connect to"]
-    timeout: A[Optional[float], "connection timeout in seconds"]
+    dsn: Annotated[Optional[str], "connection arguments in libpg connection URI format"]
+    host: Annotated[Optional[str], "database host address"]
+    port: Annotated[Optional[int], "port number to connect to"]
+    user: Annotated[Optional[str], "the name of the database role used for authentication"]
+    password: Annotated[Optional[str], "password to be used for authentication"]
+    passfile: Annotated[Optional[str], "the name of the file used to store passwords"]
+    database: Annotated[Optional[str], "the name of the database to connect to"]
+    timeout: Annotated[Optional[float], "connection timeout in seconds"]
     ssl: Optional[Literal["disable", "prefer", "require", "verify-ca", "verify-full"]]
-
-
-def _asdict(config):
-    return (
-        {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
-        if config is not None
-        else {}
-    )
 
 
 @asynccontextmanager
@@ -251,22 +244,30 @@ class Database(fondat.sql.Database):
     """
     Manages access to a PostgreSQL database.
 
-    Parameters:
-    • host: Database host address.
-    • port: Port number to connect to at the server host.
-    • user: The name of the database role used for authentication.
-    • database: The name of the database to connect to.
-    • password: Password to be used for authentication.
-    • timeout: Connection timeout in seconds.
+    Supplied configuration can be a Config dataclass instance, or a function or coroutine
+    function that returns a Config dataclass instance.
     """
 
-    __slots__ = ("_kwargs", "_conn", "_txn")
-
-    def __init__(self, config=None, **kwargs):
+    def __init__(
+        self,
+        config: Union[Config, Callable[[], Config], Callable[[], Coroutine[Any, Any, Config]]],
+    ):
         super().__init__()
-        self._kwargs = _asdict(config) | kwargs
+        self.config = config
         self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
         self._txn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
+
+    async def _config(self):
+        config = None
+        if isinstance(self.config, Config):
+            config = self.config
+        elif callable(self.config):
+            config = self.config()
+            if asyncio.iscoroutine(config):
+                config = await config
+        with fondat.error.replace(Exception, RuntimeError):
+            validate(config, Config, "config")
+        return config
 
     @asynccontextmanager
     async def connection(self):
@@ -274,7 +275,9 @@ class Database(fondat.sql.Database):
             yield
             return
         _logger.debug("open connection")
-        connection = await asyncpg.connect(**self._kwargs)
+        config = await self._config()
+        kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+        connection = await asyncpg.connect(**kwargs)
         token = self._conn.set(connection)
         try:
             yield
@@ -291,7 +294,7 @@ class Database(fondat.sql.Database):
         txid = uuid.uuid4().hex
         _logger.debug("transaction begin %s", txid)
         token = self._txn.set(txid)
-        async with (self.connection() if not self._conn.get() else _async_null_context()):
+        async with self.connection():
             connection = self._conn.get()
             transaction = connection.transaction()
             await transaction.start()
