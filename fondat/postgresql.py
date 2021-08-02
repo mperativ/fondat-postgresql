@@ -331,13 +331,12 @@ class Database(fondat.sql.Database):
                 args.append(get_codec(fragment.python_type).encode(fragment.value))
                 text.append(f"${len(args)}")
         text = "".join(text)
-        async with (self.transaction() if not self._txn.get() else _async_null_context()):
-            conn = self._conn.get()
-            _logger.debug("%s args=%s", text, args)
-            if statement.result is None:
-                await conn.execute(text, *args)
-            else:  # expecting a result
-                return _Results(statement, conn.cursor(text, *args).__aiter__())
+        conn = self._conn.get()
+        _logger.debug("%s args=%s", text, args)
+        if statement.result is None:
+            await conn.execute(text, *args)
+        else:  # expecting a result
+            return _Results(statement, conn.cursor(text, *args).__aiter__())
 
     def get_codec(self, python_type: Any) -> PostgreSQLCodec:
         return get_codec(python_type)
