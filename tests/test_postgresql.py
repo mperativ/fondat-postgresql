@@ -64,6 +64,7 @@ async def test_database_config_dataclass():
 async def test_database_config_function():
     def config_fn():
         return config
+
     database = fondat.postgresql.Database(config=config_fn)
     async with database.transaction():
         stmt = sql.Statement()
@@ -74,6 +75,7 @@ async def test_database_config_function():
 async def test_database_config_coroutine_function():
     async def config_corofn():
         return config
+
     database = fondat.postgresql.Database(config=config_corofn)
     async with database.transaction():
         stmt = sql.Statement()

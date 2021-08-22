@@ -19,6 +19,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from fondat.data import datacls
 from fondat.sql import Statement
+from fondat.types import is_subclass
 from fondat.validation import validate, validate_arguments
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
@@ -59,6 +60,10 @@ def _codec_provider(wrapped=None):
 
 def _pass_codec(python_type, sql_type):
     class PassCodec(PostgreSQLCodec[python_type]):
+        def __init__(self):
+            self.python_type = python_type
+            self.sql_type = sql_type
+
         @validate_arguments
         def encode(self, value: python_type) -> python_type:
             return value
@@ -67,43 +72,41 @@ def _pass_codec(python_type, sql_type):
         def decode(self, value: python_type) -> python_type:
             return value
 
-    PassCodec.sql_type = sql_type
     return PassCodec()
 
 
-def _pass_codec_provider(sql_type, python_types):
-    if not isinstance(python_types, Iterable):
-        python_types = (python_types,)
-
-    @_codec_provider
-    def provider(python_type):
-        if python_type in python_types:
-            return _pass_codec(python_type, sql_type)
+_pass_codecs = []
 
 
-_pass_codec_provider("bigint", int)
-_pass_codec_provider("boolean", bool)
-_pass_codec_provider("bytea", (bytes, bytearray))
-_pass_codec_provider("date", date)
-_pass_codec_provider("double precision", float)
-_pass_codec_provider("numeric", Decimal)
-_pass_codec_provider("text", str)
-_pass_codec_provider("timestamp with time zone", datetime)
-_pass_codec_provider("uuid", UUID)
+def _add_pass_codec(python_type, sql_type):
+    _pass_codecs.append(_pass_codec(python_type, sql_type))
 
 
-def _issubclass(cls, cls_or_tuple):
-    try:
-        return issubclass(cls, cls_or_tuple)
-    except:
-        return False
+# order is significant
+_add_pass_codec(str, "text")
+_add_pass_codec(bool, "boolean")
+_add_pass_codec(int, "bigint")
+_add_pass_codec(float, "double precision")
+_add_pass_codec(bytes, "bytea")
+_add_pass_codec(bytearray, "bytea")
+_add_pass_codec(UUID, "uuid")
+_add_pass_codec(Decimal, "numeric")
+_add_pass_codec(datetime, "timestamp with time zone")
+_add_pass_codec(date, "date")
+
+
+@_codec_provider
+def pass_provider(python_type):
+    for codec in _pass_codecs:
+        if is_subclass(python_type, codec.python_type):
+            return codec
 
 
 @_codec_provider
 def _iterable_codec_provider(python_type):
 
     origin = typing.get_origin(python_type)
-    if not origin or not _issubclass(origin, Iterable):
+    if not origin or not is_subclass(origin, Iterable):
         return
 
     args = typing.get_args(python_type)
@@ -274,9 +277,9 @@ class Database(fondat.sql.Database):
         if self._conn.get(None):  # connection already established
             yield
             return
-        _logger.debug("open connection")
         config = await self._config()
         kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+        _logger.debug(f"open connection ({kwargs})")
         connection = await asyncpg.connect(**kwargs)
         token = self._conn.set(connection)
         try:
