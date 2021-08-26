@@ -160,13 +160,13 @@ async def test_rollback(table):
 
 
 def test_consecutive_loop(database):
-    @sql.transaction(database=database)
     async def select():
-        stmt = sql.Statement()
-        stmt.text("SELECT 1 AS foo;")
-        stmt.result = make_datacls("DC", (("foo", int),))
-        result = await (await database.execute(stmt)).__anext__()
-        assert result.foo == 1
+        async with database.transaction():
+            stmt = sql.Statement()
+            stmt.text("SELECT 1 AS foo;")
+            stmt.result = make_datacls("DC", (("foo", int),))
+            result = await (await database.execute(stmt)).__anext__()
+            assert result.foo == 1
 
     asyncio.run(select())
     asyncio.run(select())
@@ -215,28 +215,11 @@ async def test_no_transaction(database):
             await database.execute(stmt)
 
 
-async def connection_decorator(table):
-    @sql.connection
-    async def foo():
-        key = uuid4()
-        await table.insert(DC(key=key))
-        assert await table.read(key)
-
-    await foo()
-
-
-async def transaction_decorator(table):
-    key = uuid4()
-
-    @sql.transaction
-    async def foo():
-        await table.insert(DC(key=key))
-        assert await table.read(key) is not None
-        raise RuntimeError  # rollback
-
-    try:
-        await foo()
-    except RuntimeError:
-        pass
-    async with table.database.transaction():
-        assert table.read(key) is None
+async def test_foo(database):
+    DC = make_datacls("DC", (("id", str), ("val", list[str])))
+    table = sql.Table(name="fun", database=database, schema=DC, pk="id")
+    index = fondat.postgresql.Index(name="fun_ix", table=table, keys=("val",), method="GIN")
+    async with database.transaction():
+        await table.create()
+        await index.create()
+        await table.drop()

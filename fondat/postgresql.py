@@ -13,7 +13,7 @@ import logging
 import typing
 import uuid
 
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterable
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Sequence
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
@@ -343,3 +343,46 @@ class Database(fondat.sql.Database):
 
     def get_codec(self, python_type: Any) -> PostgreSQLCodec:
         return get_codec(python_type)
+
+
+class Index(fondat.sql.Index):
+    """
+    Represents an index on a table in a PostgreSQL database.
+
+    Parameters:
+    • name: name of index
+    • table: table that the index defined for
+    • keys: index keys (typically column names with optional order)
+    • unique: is index unique
+    • method: indexing method
+    """
+
+    __slots__ = ("method",)
+
+    def __init__(
+        self,
+        name: str,
+        table: fondat.sql.Table,
+        keys: Sequence[str],
+        unique: bool = False,
+        method: str = None,
+    ):
+        super().__init__(name, table, keys, unique)
+        self.method = method
+
+    def __repr__(self):
+        result = f"Index(name={self.name}, table={self.table}, keys={self.keys}, unique={self.unique} method={self.method})"
+
+    async def create(self):
+        """Create index in database."""
+        stmt = Statement()
+        stmt.text("CREATE ")
+        if self.unique:
+            stmt.text("UNIQUE ")
+        stmt.text(f"INDEX {self.name} ON {self.table.name} ")
+        if self.method:
+            stmt.text(f"USING {self.method} ")
+        stmt.text("(")
+        stmt.text(", ".join(self.keys))
+        stmt.text(");")
+        await self.table.database.execute(stmt)
