@@ -258,7 +258,8 @@ class Database(fondat.sql.Database):
         super().__init__()
         self.config = config
         self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
-        self._txn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
+        self._txn = contextvars.ContextVar("fondat_postgresql_txn", default=None)
+        self._task = contextvars.ContextVar("fondat_postgresql_task", default=None)
 
     async def _config(self):
         config = None
@@ -274,19 +275,21 @@ class Database(fondat.sql.Database):
 
     @asynccontextmanager
     async def connection(self):
-        if self._conn.get(None):  # connection already established
-            yield
+        task = asyncio.current_task()
+        if self._conn.get() and self._task.get() is task:
+            yield  # connection already established
             return
+        self._task.set(task)
         config = await self._config()
         kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
         _logger.debug(f"open connection ({kwargs})")
         connection = await asyncpg.connect(**kwargs)
-        token = self._conn.set(connection)
+        self._conn.set(connection)
         try:
             yield
         finally:
             _logger.debug("close connection")
-            self._conn.reset(token)
+            self._conn.set(None)
             try:
                 await connection.close()
             except Exception as e:
