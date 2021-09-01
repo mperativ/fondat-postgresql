@@ -225,9 +225,14 @@ class _Results(AsyncIterator[Any]):
         return self.statement.result(**{k: self.codecs[k].decode(row[k]) for k in self.codecs})
 
 
+# fmt: off
 @datacls
 class Config:
     dsn: Annotated[Optional[str], "connection arguments in libpg connection URI format"]
+    min_size: Annotated[Optional[int], "number of connections to initialize pool with"]
+    max_size: Annotated[Optional[int], "maximum number of connections in the pool"]
+    max_queries: Annotated[Optional[int], "number of queries before connection is replaced"]
+    max_inactive_connection_lifetime: Annotated[Optional[float], "seconds after inactive connection closed"]
     host: Annotated[Optional[str], "database host address"]
     port: Annotated[Optional[int], "port number to connect to"]
     user: Annotated[Optional[str], "the name of the database role used for authentication"]
@@ -236,6 +241,7 @@ class Config:
     database: Annotated[Optional[str], "the name of the database to connect to"]
     timeout: Annotated[Optional[float], "connection timeout in seconds"]
     ssl: Optional[Literal["disable", "prefer", "require", "verify-ca", "verify-full"]]
+# fmt: on
 
 
 @asynccontextmanager
@@ -251,27 +257,21 @@ class Database(fondat.sql.Database):
     function that returns a Config dataclass instance.
     """
 
-    def __init__(
-        self,
-        config: Union[Config, Callable[[], Config], Callable[[], Coroutine[Any, Any, Config]]],
-    ):
-        super().__init__()
-        self.config = config
+    @classmethod
+    async def create(cls, config: Config):
+        self = cls()
+        kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+        self.pool = await asyncpg.create_pool(**kwargs)
         self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
         self._txn = contextvars.ContextVar("fondat_postgresql_txn", default=None)
         self._task = contextvars.ContextVar("fondat_postgresql_task", default=None)
+        return self
 
-    async def _config(self):
-        config = None
-        if isinstance(self.config, Config):
-            config = self.config
-        elif callable(self.config):
-            config = self.config()
-            if asyncio.iscoroutine(config):
-                config = await config
-        with fondat.error.replace(Exception, RuntimeError):
-            validate(config, Config, "config")
-        return config
+    async def close(self):
+        """Close all database connections."""
+        if self.pool:
+            await self.pool.close()
+        self.pool = None
 
     @asynccontextmanager
     async def connection(self):
@@ -279,21 +279,15 @@ class Database(fondat.sql.Database):
         if self._conn.get() and self._task.get() is task:
             yield  # connection already established
             return
+        _logger.debug("open connection")
         self._task.set(task)
-        config = await self._config()
-        kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
-        _logger.debug(f"open connection ({kwargs})")
-        connection = await asyncpg.connect(**kwargs)
-        self._conn.set(connection)
-        try:
-            yield
-        finally:
-            _logger.debug("close connection")
-            self._conn.set(None)
+        async with self.pool.acquire() as connection:
+            self._conn.set(connection)
             try:
-                await connection.close()
-            except Exception as e:
-                _logger.error(exc_info=e)
+                yield
+            finally:
+                _logger.debug("close connection")
+                self._conn.set(None)
 
     @asynccontextmanager
     async def transaction(self):

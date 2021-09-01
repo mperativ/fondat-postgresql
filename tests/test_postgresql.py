@@ -38,9 +38,16 @@ config = fondat.postgresql.Config(
 )
 
 
-@pytest.fixture(scope="function")
-def database():
-    yield fondat.postgresql.Database(config)
+@pytest.fixture(scope="module")
+def event_loop():
+    return asyncio.get_event_loop()
+
+
+@pytest.fixture(scope="module")
+async def database():
+    db = await fondat.postgresql.Database.create(config)
+    yield db
+    await db.close()
 
 
 @pytest.fixture(scope="function")
@@ -51,36 +58,6 @@ async def table(database):
     yield foo
     async with database.transaction():
         await foo.drop()
-
-
-async def test_database_config_dataclass():
-    database = fondat.postgresql.Database(config=config)
-    async with database.transaction():
-        stmt = sql.Statement()
-        stmt.text(f"SELECT 1;")
-        await database.execute(stmt)
-
-
-async def test_database_config_function():
-    def config_fn():
-        return config
-
-    database = fondat.postgresql.Database(config=config_fn)
-    async with database.transaction():
-        stmt = sql.Statement()
-        stmt.text(f"SELECT 1;")
-        await database.execute(stmt)
-
-
-async def test_database_config_coroutine_function():
-    async def config_corofn():
-        return config
-
-    database = fondat.postgresql.Database(config=config_corofn)
-    async with database.transaction():
-        stmt = sql.Statement()
-        stmt.text(f"SELECT 1;")
-        await database.execute(stmt)
 
 
 async def test_crud(table):
@@ -159,28 +136,14 @@ async def test_rollback(table):
         assert await table.count() == 0
 
 
-def test_consecutive_loop(database):
-    async def select():
-        async with database.transaction():
-            stmt = sql.Statement()
-            stmt.text("SELECT 1 AS foo;")
-            stmt.result = make_datacls("DC", (("foo", int),))
-            result = await (await database.execute(stmt)).__anext__()
-            assert result.foo == 1
-
-    asyncio.run(select())
-    asyncio.run(select())
-
-
 async def test_gather(database):
     async def select(n: int):
-        async with database.transaction():
-            stmt = sql.Statement()
-            stmt.text(f"SELECT {n} AS foo;")
-            stmt.result = make_datacls("DC", (("foo", int),))
-            async with database.transaction() as transaction:
-                result = await (await database.execute(stmt)).__anext__()
-                assert result.foo == n
+        stmt = sql.Statement()
+        stmt.text(f"SELECT {n} AS foo;")
+        stmt.result = make_datacls("DC", (("foo", int),))
+        async with database.transaction() as transaction:
+            result = await (await database.execute(stmt)).__anext__()
+            assert result.foo == n
 
     await asyncio.gather(*[select(n) for n in range(0, 50)])
 
