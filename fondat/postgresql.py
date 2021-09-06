@@ -328,7 +328,7 @@ class Database(fondat.sql.Database):
             if isinstance(fragment, str):
                 text.append(fragment)
             else:
-                args.append(get_codec(fragment.python_type).encode(fragment.value))
+                args.append(get_codec(fragment.type).encode(fragment.value))
                 text.append(f"${len(args)}")
         text = "".join(text)
         conn = self._conn.get()
@@ -373,13 +373,13 @@ class Index(fondat.sql.Index):
     async def create(self):
         """Create index in database."""
         stmt = Statement()
-        stmt.text("CREATE ")
+        stmt += "CREATE "
         if self.unique:
-            stmt.text("UNIQUE ")
-        stmt.text(f"INDEX {self.name} ON {self.table.name} ")
+            stmt += "UNIQUE "
+        stmt += f"INDEX {self.name} ON {self.table.name} "
         if self.method:
-            stmt.text(f"USING {self.method} ")
-        stmt.text("(")
-        stmt.text(", ".join(self.keys))
-        stmt.text(");")
+            stmt += f"USING {self.method} "
+        stmt += "("
+        stmt += ", ".join(self.keys)
+        stmt += ");"
         await self.table.database.execute(stmt)

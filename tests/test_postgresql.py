@@ -7,6 +7,7 @@ import logging
 
 from datetime import date, datetime
 from fondat.data import datacls, make_datacls
+from fondat.sql import Statement, Expression, Param
 from typing import Optional, TypedDict
 from uuid import UUID, uuid4
 
@@ -97,8 +98,7 @@ async def test_list(table):
         for _ in range(0, count):
             body = DC(key=uuid4())
             await table.insert(body)
-        results = await table.select(columns="key")
-        keys = [result["key"] async for result in results]
+        keys = [row["key"] async for row in table.select(columns="key")]
         assert len(keys) == count
         for key in keys:
             await table.delete(key)
@@ -110,11 +110,18 @@ async def test_list_where(table):
         for n in range(0, 20):
             body = DC(key=uuid4(), int_=n)
             await table.insert(body)
-        where = sql.Statement()
-        where.text("int_ < ")
-        where.param(10)
-        results = await table.select(columns="key", where=where)
-        keys = [result["key"] async for result in results]
+        keys = [
+            row["key"]
+            async for row in table.select(
+                columns="key",
+                where=Expression(
+                    "int_ < ",
+                    Param(
+                        10,
+                    ),
+                ),
+            )
+        ]
         assert len(keys) == 10
         for key in keys:
             await table.delete(key)
@@ -138,9 +145,7 @@ async def test_rollback(table):
 
 async def test_gather(database):
     async def select(n: int):
-        stmt = sql.Statement()
-        stmt.text(f"SELECT {n} AS foo;")
-        stmt.result = make_datacls("DC", (("foo", int),))
+        stmt = Statement(f"SELECT {n} AS foo;", result=make_datacls("DC", (("foo", int),)))
         async with database.transaction() as transaction:
             result = await (await database.execute(stmt)).__anext__()
             assert result.foo == n
@@ -164,16 +169,13 @@ async def test_nested_transaction(table):
 
 
 async def test_no_connection(database):
-    stmt = sql.Statement()
-    stmt.text(f"SELECT 1;")
     with pytest.raises(RuntimeError):
-        await database.execute(stmt)
+        await database.execute(Statement(f"SELECT 1;"))
 
 
 async def test_no_transaction(database):
     async with database.connection():
-        stmt = sql.Statement()
-        stmt.text(f"SELECT 1;")
+        stmt = sql.Statement(f"SELECT 1;")
         with pytest.raises(RuntimeError):
             await database.execute(stmt)
 
