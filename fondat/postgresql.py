@@ -222,7 +222,11 @@ class _Results(AsyncIterator[Any]):
 
     async def __anext__(self):
         row = await self.results.__anext__()
-        return self.statement.result(**{k: self.codecs[k].decode(row[k]) for k in self.codecs})
+        result = {}
+        for key in self.codecs:
+            with fondat.error.append((TypeError, ValueError), "in column: ", key):
+                result[key] = self.codecs[key].decode(row[key])
+        return self.statement.result(**result)
 
 
 # fmt: off
