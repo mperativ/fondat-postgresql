@@ -139,7 +139,7 @@ python-versions = "*"
 
 [[package]]
 name = "fondat-core"
-version = "3.0b94"
+version = "3.0.0"
 description = "A foundation for asynchronous Python resource-oriented applications."
 category = "main"
 optional = false
@@ -153,7 +153,7 @@ wrapt = ">=1.12,<2.0"
 
 [[package]]
 name = "identify"
-version = "2.2.13"
+version = "2.2.14"
 description = "File identification library for Python"
 category = "dev"
 optional = false
@@ -406,7 +406,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "69cee623283b0ec1dd75037d3d3cc828829e63182d1f4cdf807512d71bdc48d3"
+content-hash = "c249fe70b6b9c318fa33f749f142bd44a1454c662cd74e847b1e09b0c4e96228"
 
 [metadata.files]
 aiosqlite = [
@@ -531,12 +531,12 @@ filelock = [
     {file = "filelock-3.0.12.tar.gz", hash = "sha256:18d82244ee114f543149c66a6e0c14e9c4f8a1044b5cdaadd0f82159d6a6ff59"},
 ]
 fondat-core = [
-    {file = "fondat-core-3.0b94.tar.gz", hash = "sha256:7983f386d551752b043c11266e680275ecc3c56067c3faef3d021cd7d9e6ec15"},
-    {file = "fondat_core-3.0b94-py3-none-any.whl", hash = "sha256:baf000e30122546eeb9c32a6ed65e974bed566ebafb7205ea8d66dab87367279"},
+    {file = "fondat-core-3.0.0.tar.gz", hash = "sha256:5f874632a4f51a1fa8081c85f207939c1b03be9a3e5658e0cb6a46df5d06e1ab"},
+    {file = "fondat_core-3.0.0-py3-none-any.whl", hash = "sha256:2476a1bdf1b65464f6d8cc31dfee8eee410341386202aacb04c8ef8f45cc813f"},
 ]
 identify = [
-    {file = "identify-2.2.13-py2.py3-none-any.whl", hash = "sha256:7199679b5be13a6b40e6e19ea473e789b11b4e3b60986499b1f589ffb03c217c"},
-    {file = "identify-2.2.13.tar.gz", hash = "sha256:7bc6e829392bd017236531963d2d937d66fc27cadc643ac0aba2ce9f26157c79"},
+    {file = "identify-2.2.14-py2.py3-none-any.whl", hash = "sha256:113a76a6ba614d2a3dd408b3504446bcfac0370da5995aa6a17fd7c6dffde02d"},
+    {file = "identify-2.2.14.tar.gz", hash = "sha256:32f465f3c48083f345ad29a9df8419a4ce0674bf4a8c3245191d65c83634bdbf"},
 ]
 iniconfig = [
     {file = "iniconfig-1.1.1-py2.py3-none-any.whl", hash = "sha256:011e24c64b7f47f6ebd835bb12a743f2fbe9a26d4cecaa7f53bc4f35ee9da8b3"},
