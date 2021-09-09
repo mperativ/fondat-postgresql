@@ -114,12 +114,7 @@ async def test_list_where(table):
             row["key"]
             async for row in table.select(
                 columns="key",
-                where=Expression(
-                    "int_ < ",
-                    Param(
-                        10,
-                    ),
-                ),
+                where=Expression("int_ < ", Param(10)),
             )
         ]
         assert len(keys) == 10
