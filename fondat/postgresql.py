@@ -224,7 +224,7 @@ class _Results(AsyncIterator[Any]):
         row = await self.results.__anext__()
         result = {}
         for key in self.codecs:
-            with fondat.error.append((TypeError, ValueError), "in column: ", key):
+            with fondat.error.append((TypeError, ValueError), " in column: ", key):
                 result[key] = self.codecs[key].decode(row[key])
         return self.statement.result(**result)
 
