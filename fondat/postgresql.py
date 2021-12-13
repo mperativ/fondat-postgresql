@@ -326,6 +326,8 @@ class Database(fondat.sql.Database):
     async def execute(self, statement: Statement) -> Optional[AsyncIterator[Any]]:
         if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
+        if _logger.isEnabledFor(logging.DEBUG):
+            _logger.debug(str(statement))
         text = []
         args = []
         for fragment in statement:
@@ -336,7 +338,6 @@ class Database(fondat.sql.Database):
                 text.append(f"${len(args)}")
         text = "".join(text)
         conn = self._conn.get()
-        _logger.debug("%s args=%s", text, args)
         if statement.result is None:
             await conn.execute(text, *args)
         else:  # expecting a result
