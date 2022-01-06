@@ -13,14 +13,14 @@ import logging
 import typing
 import uuid
 
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.data import datacls
 from fondat.sql import Statement
 from fondat.types import is_subclass
-from fondat.validation import validate, validate_arguments
+from fondat.validation import validate_arguments
 from typing import Annotated, Any, Literal, Optional, Union
 from uuid import UUID
 
@@ -224,7 +224,7 @@ class _Results(AsyncIterator[Any]):
         row = await self.results.__anext__()
         result = {}
         for key in self.codecs:
-            with fondat.error.append((TypeError, ValueError), " in column: ", key):
+            with fondat.codec.DecodeError.path_on_error(key):
                 result[key] = self.codecs[key].decode(row[key])
         return self.statement.result(**result)
 
