@@ -367,7 +367,7 @@ class Index(fondat.sql.Index):
         table: fondat.sql.Table,
         keys: Sequence[str],
         unique: bool = False,
-        method: str = None,
+        method: Optional[str] = None,
     ):
         super().__init__(name, table, keys, unique)
         self.method = method
