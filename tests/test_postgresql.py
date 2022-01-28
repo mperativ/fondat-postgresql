@@ -5,6 +5,7 @@ import fondat.postgresql
 import fondat.sql as sql
 import logging
 
+from copy import copy
 from datetime import date, datetime
 from fondat.data import datacls, make_datacls
 from fondat.sql import Statement, Expression, Param
@@ -53,6 +54,8 @@ async def database():
 
 @pytest.fixture(scope="function")
 async def table(database):
+    async with database.transaction():
+        await database.execute(Statement("DROP TABLE IF EXISTS foo;"))
     foo = sql.Table("foo", database, DC, "key")
     async with database.transaction():
         await foo.create()
@@ -183,3 +186,18 @@ async def test_foo(database):
         await table.create()
         await index.create()
         await table.drop()
+
+
+async def test_pool_timeout():
+    conf = copy(config)
+    conf.timeout = 0.1
+    conf.min_size = 1
+    conf.max_size = 1
+    database = await fondat.postgresql.Database.create(conf)
+
+    async def useit():
+        async with database.connection():
+            await asyncio.sleep(0.2)
+
+    with pytest.raises(asyncio.exceptions.TimeoutError):
+        await asyncio.gather(*[useit() for _ in range(2)])

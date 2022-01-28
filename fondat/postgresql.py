@@ -265,7 +265,8 @@ class Database(fondat.sql.Database):
     async def create(cls, config: Config):
         self = cls()
         kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
-        self.pool = await asyncpg.create_pool(**kwargs)
+        self._config = config
+        self._pool = await asyncpg.create_pool(**kwargs)
         self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
         self._txn = contextvars.ContextVar("fondat_postgresql_txn", default=None)
         self._task = contextvars.ContextVar("fondat_postgresql_task", default=None)
@@ -273,9 +274,9 @@ class Database(fondat.sql.Database):
 
     async def close(self):
         """Close all database connections."""
-        if self.pool:
-            await self.pool.close()
-        self.pool = None
+        if self._pool:
+            await self._pool.close()
+        self._pool = None
 
     @asynccontextmanager
     async def connection(self):
@@ -285,7 +286,7 @@ class Database(fondat.sql.Database):
             return
         _logger.debug("open connection")
         self._task.set(task)
-        async with self.pool.acquire() as connection:
+        async with self._pool.acquire(timeout=self._config.timeout) as connection:
             self._conn.set(connection)
             try:
                 yield
