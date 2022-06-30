@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ["3.9", "3.10"]
+        python: ["3.10"]
 
     steps:
 
@@ -18,7 +18,7 @@ jobs:
     - name: Setup PostgreSQL
       uses: harmon758/postgresql-action@v1
       with:
-        postgresql version: '13.1'
+        postgresql version: '14.3'
         postgresql db: 'fondat'
         postgresql user: 'fondat'
         postgresql password: 'fondat'
