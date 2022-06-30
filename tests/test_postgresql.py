@@ -1,39 +1,35 @@
-import pytest
-
 import asyncio
-import fondat.postgresql
+import fondat.postgresql as postgresql
 import fondat.sql as sql
-import logging
+import pytest
 
 from copy import copy
 from datetime import date, datetime
 from fondat.data import datacls, make_datacls
-from fondat.sql import Statement, Expression, Param
-from typing import Optional, TypedDict
+from fondat.sql import Expression, Param, Statement
+from typing import Literal, TypedDict
 from uuid import UUID, uuid4
-
-
-_logger = logging.getLogger(__name__)
-
-pytestmark = pytest.mark.asyncio
 
 
 @datacls
 class DC:
     key: UUID
-    str_: Optional[str]
-    dict_: Optional[TypedDict("TD", {"a": int})]
-    list_: Optional[list[int]]
-    set_: Optional[set[str]]
-    int_: Optional[int]
-    float_: Optional[float]
-    bool_: Optional[bool]
-    bytes_: Optional[bytes]
-    date_: Optional[date]
-    datetime_: Optional[datetime]
+    str_: str | None
+    dict_: TypedDict("TD", {"a": int}) | None
+    list_: list[int] | None
+    set_: set[str] | None
+    int_: int | None
+    float_: float | None
+    bool_: bool | None
+    bytes_: bytes | None
+    date_: date | None
+    datetime_: datetime | None
+    str_literal: Literal["a", "b", "c"] | None
+    int_literal: Literal[1, 2, 3] | None
+    mixed_literal: Literal["a", 1, True] | None
 
 
-config = fondat.postgresql.Config(
+config = postgresql.Config(
     database="fondat",
     user="fondat",
     password="fondat",
@@ -47,7 +43,7 @@ def event_loop():
 
 @pytest.fixture(scope="module")
 async def database():
-    db = await fondat.postgresql.Database.create(config)
+    db = await postgresql.Database.create(config)
     yield db
     await db.close()
 
@@ -64,6 +60,21 @@ async def table(database):
         await foo.drop()
 
 
+async def test_pool_timeout():
+    conf = copy(config)
+    conf.timeout = 0.1
+    conf.min_size = 1
+    conf.max_size = 1
+    database = await postgresql.Database.create(conf)
+
+    async def useit():
+        async with database.connection():
+            await asyncio.sleep(0.2)
+
+    with pytest.raises(asyncio.exceptions.TimeoutError):
+        await asyncio.gather(*[useit() for _ in range(2)])
+
+
 async def test_crud(table):
     async with table.database.transaction():
         body = DC(
@@ -78,6 +89,9 @@ async def test_crud(table):
             bytes_=b"12345",
             date_=date.fromisoformat("2019-01-01"),
             datetime_=datetime.fromisoformat("2019-01-01T01:01:01+00:00"),
+            str_literal="a",
+            int_literal=2,
+            mixed_literal=1,
         )
         await table.insert(body)
         assert await table.read(body.key) == body
@@ -89,6 +103,9 @@ async def test_crud(table):
         body.bool_ = False
         body.bytes_ = None
         body.date_ = None
+        body.str_literal = None
+        body.int_literal = None
+        body.mixed_literal = None
         await table.update(body)
         assert await table.read(body.key) == body
         await table.delete(body.key)
@@ -144,7 +161,7 @@ async def test_rollback(table):
 async def test_gather(database):
     async def select(n: int):
         stmt = Statement(f"SELECT {n} AS foo;", result=make_datacls("DC", (("foo", int),)))
-        async with database.transaction() as transaction:
+        async with database.transaction():
             result = await (await database.execute(stmt)).__anext__()
             assert result.foo == n
 
@@ -178,26 +195,16 @@ async def test_no_transaction(database):
             await database.execute(stmt)
 
 
-async def test_foo(database):
-    DC = make_datacls("DC", (("id", str), ("val", list[str])))
-    table = sql.Table(name="fun", database=database, schema=DC, pk="id")
-    index = fondat.postgresql.Index(name="fun_ix", table=table, keys=("val",), method="GIN")
-    async with database.transaction():
-        await table.create()
-        await index.create()
-        await table.drop()
+async def test_str_literal():
+    codec = postgresql.get_codec(Literal["a", "b", "c"])
+    assert codec.sql_type == "text"
 
 
-async def test_pool_timeout():
-    conf = copy(config)
-    conf.timeout = 0.1
-    conf.min_size = 1
-    conf.max_size = 1
-    database = await fondat.postgresql.Database.create(conf)
+async def test_int_literal():
+    codec = postgresql.get_codec(Literal[1, 2, 3])
+    assert codec.sql_type == "bigint"
 
-    async def useit():
-        async with database.connection():
-            await asyncio.sleep(0.2)
 
-    with pytest.raises(asyncio.exceptions.TimeoutError):
-        await asyncio.gather(*[useit() for _ in range(2)])
+async def test_mixed_literal():
+    codec = postgresql.get_codec(Literal["a", 1, True])
+    assert codec.sql_type == "jsonb"

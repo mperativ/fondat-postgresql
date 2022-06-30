@@ -8,7 +8,7 @@ target-version = ['py310']
 
 [tool.poetry]
 name = "fondat-postgresql"
-version = "3.0.3"
+version = "4.0a1"
 description = "Fondat PostgreSQL module."
 readme = "README.md"
 authors = ["fondat-postgresql authors"]
@@ -17,7 +17,7 @@ documentation = "https://github.com/fondat/fondat-postgresql/wiki"
 license = "MIT"
 keywords = ["asgi", "framework", "resource", "openapi"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
@@ -26,13 +26,25 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
-fondat-core = "^3.0.15"
+python = "^3.10"
+fondat = "^4.0a5"
 asyncpg = "^0.25"
 
 [tool.poetry.dev-dependencies]
-black = "^21.12b0"
-pre-commit = "^2.17"
-pytest = "^6.2"
-pytest-asyncio = "^0.14"
-pytest-cov = "^2.12"
+black = "^22.6"
+isort = "^5.10"
+pre-commit = "^2.19"
+pytest = "^7.1"
+pytest-asyncio = "^0.18"
+pytest-cov = "^3.0"
+
+[tool.isort]
+profile = "black"
+lexicographical = true
+lines_after_imports = 2
+lines_between_types = 1
+line_length = 96
+no_sections = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

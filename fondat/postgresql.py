@@ -10,6 +10,7 @@ import fondat.sql
 import functools
 import json
 import logging
+import types
 import typing
 import uuid
 
@@ -17,11 +18,12 @@ from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
+from fondat.codec import JSON, DecodeError
 from fondat.data import datacls
 from fondat.sql import Statement
-from fondat.types import is_subclass
+from fondat.types import is_optional, is_subclass, literal_values
 from fondat.validation import validate_arguments
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 
@@ -139,7 +141,7 @@ def _union_codec_provider(python_type):
     """
 
     origin = typing.get_origin(python_type)
-    if origin is not Union:
+    if origin not in {typing.Union, types.UnionType}:
         return
 
     args = typing.get_args(python_type)
@@ -171,16 +173,40 @@ def _union_codec_provider(python_type):
 @_codec_provider
 def _literal_codec_provider(python_type):
     """
-    Provides a codec that encodes/decodes a Literal value to/from a compatible
-    PostgreSQL value. If all literal values share the same type, then a codec
-    for that type will be used, otherwise it encodes/decodes as jsonb.
+    Provides a codec that encodes/decodes a Literal value to/from a compatible SQLite value.
+    If all literal values share the same type, then it will use a codec for that type,
+    otherwise it will encode/decode as TEXT.
     """
 
     origin = typing.get_origin(python_type)
+
     if origin is not Literal:
         return
 
-    return get_codec(Union[tuple(type(arg) for arg in typing.get_args(python_type))])
+    literals = literal_values(python_type)
+    types = list({type(literal) for literal in literals})
+    codec = get_codec(types[0]) if len(types) == 1 else _jsonb_codec_provider(python_type)
+    is_nullable = is_optional(python_type) or None in literals
+
+    class LiteralCodec(PostgreSQLCodec[python_type]):
+
+        sql_type = codec.sql_type
+
+        @validate_arguments
+        def encode(self, value: python_type) -> Any:
+            if value is None:
+                return None
+            return codec.encode(value)
+
+        def decode(self, value: Any) -> python_type:
+            if value is None and is_nullable:
+                return None
+            result = codec.decode(value)
+            if result not in literals:
+                raise DecodeError
+            return result
+
+    return LiteralCodec()
 
 
 @_codec_provider
@@ -191,7 +217,7 @@ def _jsonb_codec_provider(python_type):
     It must be the last provider in the list to serve as a catch-all.
     """
 
-    json_codec = fondat.codec.get_codec(fondat.codec.JSON, python_type)
+    json_codec = fondat.codec.get_codec(JSON, python_type)
 
     class JSONBCodec(PostgreSQLCodec[python_type]):
 
@@ -224,7 +250,7 @@ class _Results(AsyncIterator[Any]):
         row = await self.results.__anext__()
         result = {}
         for key in self.codecs:
-            with fondat.codec.DecodeError.path_on_error(key):
+            with DecodeError.path_on_error(key):
                 result[key] = self.codecs[key].decode(row[key])
         return self.statement.result(**result)
 
@@ -232,19 +258,19 @@ class _Results(AsyncIterator[Any]):
 # fmt: off
 @datacls
 class Config:
-    dsn: Annotated[Optional[str], "connection arguments in libpg connection URI format"]
-    min_size: Annotated[Optional[int], "number of connections to initialize pool with"]
-    max_size: Annotated[Optional[int], "maximum number of connections in the pool"]
-    max_queries: Annotated[Optional[int], "number of queries before connection is replaced"]
-    max_inactive_connection_lifetime: Annotated[Optional[float], "seconds after inactive connection closed"]
-    host: Annotated[Optional[str], "database host address"]
-    port: Annotated[Optional[int], "port number to connect to"]
-    user: Annotated[Optional[str], "the name of the database role used for authentication"]
-    password: Annotated[Optional[str], "password to be used for authentication"]
-    passfile: Annotated[Optional[str], "the name of the file used to store passwords"]
-    database: Annotated[Optional[str], "the name of the database to connect to"]
-    timeout: Annotated[Optional[float], "connection timeout in seconds"]
-    ssl: Optional[Literal["disable", "prefer", "require", "verify-ca", "verify-full"]]
+    dsn: Annotated[str | None, "connection arguments in libpg connection URI format"]
+    min_size: Annotated[int | None, "number of connections to initialize pool with"]
+    max_size: Annotated[int | None, "maximum number of connections in the pool"]
+    max_queries: Annotated[int | None, "number of queries before connection is replaced"]
+    max_inactive_connection_lifetime: Annotated[float | None, "seconds after inactive connection closed"]
+    host: Annotated[str | None, "database host address"]
+    port: Annotated[int | None, "port number to connect to"]
+    user: Annotated[str | None, "the name of the database role used for authentication"]
+    password: Annotated[str | None, "password to be used for authentication"]
+    passfile: Annotated[str | None, "the name of the file used to store passwords"]
+    database: Annotated[str | None, "the name of the database to connect to"]
+    timeout: Annotated[float | None, "connection timeout in seconds"]
+    ssl: Literal["disable", "prefer", "require", "verify-ca", "verify-full"] | None
 # fmt: on
 
 
@@ -279,7 +305,7 @@ class Database(fondat.sql.Database):
         self._pool = None
 
     @asynccontextmanager
-    async def connection(self):
+    async def connection(self) -> None:
         task = asyncio.current_task()
         if self._conn.get() and self._task.get() is task:
             yield  # connection already established
@@ -295,7 +321,7 @@ class Database(fondat.sql.Database):
                 self._conn.set(None)
 
     @asynccontextmanager
-    async def transaction(self):
+    async def transaction(self) -> None:
         txid = uuid.uuid4().hex
         _logger.debug("transaction begin %s", txid)
         token = self._txn.set(txid)
@@ -324,7 +350,7 @@ class Database(fondat.sql.Database):
             finally:
                 self._txn.reset(token)
 
-    async def execute(self, statement: Statement) -> Optional[AsyncIterator[Any]]:
+    async def execute(self, statement: Statement) -> AsyncIterator[Any] | None:
         if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
         if _logger.isEnabledFor(logging.DEBUG):
@@ -368,7 +394,7 @@ class Index(fondat.sql.Index):
         table: fondat.sql.Table,
         keys: Sequence[str],
         unique: bool = False,
-        method: Optional[str] = None,
+        method: str | None = None,
     ):
         super().__init__(name, table, keys, unique)
         self.method = method
