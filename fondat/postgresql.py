@@ -20,7 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from fondat.codec import JSON, DecodeError
 from fondat.data import datacls
-from fondat.sql import Statement
+from fondat.sql import Expression
 from fondat.types import is_optional, is_subclass, literal_values
 from fondat.validation import validate_arguments
 from typing import Annotated, Any, Literal
@@ -235,24 +235,28 @@ def _jsonb_codec_provider(python_type):
 
 
 class _Results(AsyncIterator[Any]):
-    def __init__(self, statement, results):
+
+    __slots__ = {"statement", "result", "rows", "codecs"}
+
+    def __init__(self, statement, result, rows):
         self.statement = statement
-        self.results = results
+        self.result = result
+        self.rows = rows
         self.codecs = {
             k: get_codec(t)
-            for k, t in typing.get_type_hints(statement.result, include_extras=True).items()
+            for k, t in typing.get_type_hints(result, include_extras=True).items()
         }
 
     def __aiter__(self):
         return self
 
     async def __anext__(self):
-        row = await self.results.__anext__()
+        row = await self.rows.__anext__()
         result = {}
         for key in self.codecs:
             with DecodeError.path_on_error(key):
                 result[key] = self.codecs[key].decode(row[key])
-        return self.statement.result(**result)
+        return self.result(**result)
 
 
 # fmt: off
@@ -350,7 +354,11 @@ class Database(fondat.sql.Database):
             finally:
                 self._txn.reset(token)
 
-    async def execute(self, statement: Statement) -> AsyncIterator[Any] | None:
+    async def execute(
+        self,
+        statement: Expression,
+        result: type = None,
+    ) -> AsyncIterator[Any] | None:
         if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
         if _logger.isEnabledFor(logging.DEBUG):
@@ -365,13 +373,13 @@ class Database(fondat.sql.Database):
                 text.append(f"${len(args)}")
         text = "".join(text)
         conn = self._conn.get()
-        if statement.result is None:
+        if result is None:
             await conn.execute(text, *args)
         else:  # expecting a result
-            return _Results(statement, conn.cursor(text, *args).__aiter__())
+            return _Results(statement, result, conn.cursor(text, *args).__aiter__())
 
-    def get_codec(self, python_type: Any) -> PostgreSQLCodec:
-        return get_codec(python_type)
+    def sql_type(self, type: Any) -> str:
+        return get_codec(type).sql_type
 
 
 class Index(fondat.sql.Index):
@@ -404,7 +412,7 @@ class Index(fondat.sql.Index):
 
     async def create(self):
         """Create index in database."""
-        stmt = Statement()
+        stmt = Expression()
         stmt += "CREATE "
         if self.unique:
             stmt += "UNIQUE "

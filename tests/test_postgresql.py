@@ -6,7 +6,7 @@ import pytest
 from copy import copy
 from datetime import date, datetime
 from fondat.data import datacls, make_datacls
-from fondat.sql import Expression, Param, Statement
+from fondat.sql import Expression, Param
 from typing import Literal, TypedDict
 from uuid import UUID, uuid4
 
@@ -51,7 +51,7 @@ async def database():
 @pytest.fixture(scope="function")
 async def table(database):
     async with database.transaction():
-        await database.execute(Statement("DROP TABLE IF EXISTS foo;"))
+        await database.execute(Expression("DROP TABLE IF EXISTS foo;"))
     foo = sql.Table("foo", database, DC, "key")
     async with database.transaction():
         await foo.create()
@@ -160,9 +160,11 @@ async def test_rollback(table):
 
 async def test_gather(database):
     async def select(n: int):
-        stmt = Statement(f"SELECT {n} AS foo;", result=make_datacls("DC", (("foo", int),)))
+        stmt = Expression(f"SELECT {n} AS foo;")
         async with database.transaction():
-            result = await (await database.execute(stmt)).__anext__()
+            result = await (
+                await database.execute(stmt, make_datacls("DC", (("foo", int),)))
+            ).__anext__()
             assert result.foo == n
 
     await asyncio.gather(*[select(n) for n in range(0, 50)])
@@ -185,12 +187,12 @@ async def test_nested_transaction(table):
 
 async def test_no_connection(database):
     with pytest.raises(RuntimeError):
-        await database.execute(Statement(f"SELECT 1;"))
+        await database.execute(Expression(f"SELECT 1;"))
 
 
 async def test_no_transaction(database):
     async with database.connection():
-        stmt = sql.Statement(f"SELECT 1;")
+        stmt = sql.Expression(f"SELECT 1;")
         with pytest.raises(RuntimeError):
             await database.execute(stmt)
 
