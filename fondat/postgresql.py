@@ -7,231 +7,193 @@ import dataclasses
 import fondat.codec
 import fondat.error
 import fondat.sql
-import functools
 import json
 import logging
 import types
 import typing
 import uuid
 
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from decimal import Decimal
-from fondat.codec import JSON, DecodeError
+from fondat.codec import Codec, DecodeError, JSONCodec
 from fondat.data import datacls
 from fondat.sql import Expression
-from fondat.types import is_optional, is_subclass, literal_values
+from fondat.types import is_optional, is_subclass, literal_values, strip_annotations
 from fondat.validation import validate_arguments
-from typing import Annotated, Any, Literal
+from types import NoneType
+from typing import Annotated, Any, Literal, TypeVar, get_args, get_origin
 from uuid import UUID
 
 
 _logger = logging.getLogger(__name__)
 
-NoneType = type(None)
+
+PT = TypeVar("PT")
+ST = TypeVar("ST")
 
 
-class PostgreSQLCodec(fondat.codec.Codec[fondat.codec.F, Any]):
+class PostgreSQLCodec(Codec[PT, Any]):
     """Base class for PostgreSQL codecs."""
 
-
-codec_providers = []
-
-
-@functools.cache
-def get_codec(python_type) -> PostgreSQLCodec:
-    """Return a codec compatible with the specified Python type."""
-
-    if typing.get_origin(python_type) is typing.Annotated:
-        python_type = typing.get_args(python_type)[0]  # strip annotation
-
-    for provider in codec_providers:
-        if (codec := provider(python_type)) is not None:
-            return codec
-
-    raise TypeError(f"failed to provide PostgreSQL codec for {python_type}")
+    _cache = {}
 
 
-def _codec_provider(wrapped=None):
-    if wrapped is None:
-        return functools.partial(_codec_provider)
-    codec_providers.append(wrapped)
-    return wrapped
+class PassthroughCodec(PostgreSQLCodec[PT]):
+    """..."""
+
+    sql_types = {
+        str: "TEXT",
+        bool: "BOOLEAN",
+        int: "BIGINT",
+        float: "DOUBLE PRECISION",
+        bytes: "BYTEA",
+        bytearray: "BYTEA",
+        UUID: "UUID",
+        Decimal: "NUMERIC",
+        datetime: "TIMESTAMP WITH TIME ZONE",
+        date: "DATE",
+    }
+
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return python_type in cls.sql_types.keys()
+
+    def __init__(self, python_type: Any):
+        super().__init__(python_type)
+        self.sql_type = self.sql_types[strip_annotations(python_type)]
+
+    @validate_arguments
+    def encode(self, value: PT) -> PT:
+        return value
+
+    @validate_arguments
+    def decode(self, value: PT) -> PT:
+        return value
 
 
-def _pass_codec(python_type, sql_type):
-    class PassCodec(PostgreSQLCodec[python_type]):
-        def __init__(self):
-            self.python_type = python_type
-            self.sql_type = sql_type
+class ArrayCodec(PostgreSQLCodec[PT]):
+    """..."""
 
-        @validate_arguments
-        def encode(self, value: python_type) -> python_type:
-            return value
+    _AVOID = str | bytes | bytearray | Mapping | tuple
 
-        @validate_arguments
-        def decode(self, value: python_type) -> python_type:
-            return value
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        origin = get_origin(python_type) or python_type
+        args = get_args(python_type)
+        return (
+            is_subclass(origin, Iterable) and is_subclass(origin, cls._AVOID) and len(args) == 1
+        )
 
-    return PassCodec()
+    def __init__(self, python_type: Any):
+        super().__init__(python_type)
+        python_type = strip_annotations(python_type)
+        self.codec = PostgreSQLCodec.get(get_args(python_type)[0])
+        self.sql_type = f"{self.codec.sql_type}[]"
 
+    def encode(self, value: PT) -> Any:
+        return [self.codec.encode(v) for v in value]
 
-_pass_codecs = []
-
-
-def _add_pass_codec(python_type, sql_type):
-    _pass_codecs.append(_pass_codec(python_type, sql_type))
-
-
-# order is significant
-_add_pass_codec(str, "text")
-_add_pass_codec(bool, "boolean")
-_add_pass_codec(int, "bigint")
-_add_pass_codec(float, "double precision")
-_add_pass_codec(bytes, "bytea")
-_add_pass_codec(bytearray, "bytea")
-_add_pass_codec(UUID, "uuid")
-_add_pass_codec(Decimal, "numeric")
-_add_pass_codec(datetime, "timestamp with time zone")
-_add_pass_codec(date, "date")
+    def decode(self, value: Any) -> PT:
+        return self.python_type(self.codec.decode(v) for v in value)
 
 
-@_codec_provider
-def pass_provider(python_type):
-    for codec in _pass_codecs:
-        if is_subclass(python_type, codec.python_type):
-            return codec
-
-
-@_codec_provider
-def _iterable_codec_provider(python_type):
-
-    origin = typing.get_origin(python_type)
-    if not origin or not is_subclass(origin, Iterable):
-        return
-
-    args = typing.get_args(python_type)
-    if not args or len(args) > 1:
-        return
-
-    codec = get_codec(args[0])
-
-    class IterableCodec(PostgreSQLCodec[python_type]):
-
-        sql_type = f"{codec.sql_type}[]"
-
-        @validate_arguments
-        def encode(self, value: python_type) -> Any:
-            return [codec.encode(v) for v in value]
-
-        @validate_arguments
-        def decode(self, value: Any) -> python_type:
-            return python_type(codec.decode(v) for v in value)
-
-    return IterableCodec()
-
-
-@_codec_provider
-def _union_codec_provider(python_type):
+class UnionCodec(PostgreSQLCodec[PT]):
     """
-    Provides a codec that encodes/decodes a Union or Optional value to/from a
-    compatible PostgreSQL value. For Optional value, will use codec for its
-    type, otherwise it encodes/decodes as jsonb.
+    Codec that encodes/decodes a UnionType, Union or optional value to/from a compatible SQL
+    value. For an optional type, it will use the codec for its type, otherwise it will
+    encode/decode as JSONB.
     """
 
-    origin = typing.get_origin(python_type)
-    if origin not in {typing.Union, types.UnionType}:
-        return
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return typing.get_origin(python_type) in {typing.Union, types.UnionType}
 
-    args = typing.get_args(python_type)
-    is_nullable = NoneType in args
-    args = [a for a in args if a is not NoneType]
-    codec = (
-        get_codec(args[0]) if len(args) == 1 else _jsonb_codec_provider(python_type)
-    )  # Optional[T]
+    def __init__(self, python_type: type[PT]):
+        super().__init__(python_type)
+        raw_type = strip_annotations(python_type)
+        args = typing.get_args(raw_type)
+        self.is_nullable = is_optional(raw_type)
+        args = [a for a in args if a is not NoneType]
+        self.codec = PostgreSQLCodec.get(args[0]) if len(args) == 1 else JSONBCodec(python_type)
+        self.sql_type = self.codec.sql_type
 
-    class UnionCodec(PostgreSQLCodec[python_type]):
+    def encode(self, value: PT) -> Any:
+        if value is None:
+            return None
+        return self.codec.encode(value)
 
-        sql_type = codec.sql_type
-
-        @validate_arguments
-        def encode(self, value: python_type) -> Any:
-            if value is None:
-                return None
-            return codec.encode(value)
-
-        @validate_arguments
-        def decode(self, value: Any) -> python_type:
-            if value is None and is_nullable:
-                return None
-            return codec.decode(value)
-
-    return UnionCodec()
+    def decode(self, value: Any) -> PT:
+        if value is None and self.is_nullable:
+            return None
+        return self.codec.decode(value)
 
 
-@_codec_provider
-def _literal_codec_provider(python_type):
+class LiteralCodec(PostgreSQLCodec[PT]):
     """
-    Provides a codec that encodes/decodes a Literal value to/from a compatible SQLite value.
-    If all literal values share the same type, then it will use a codec for that type,
-    otherwise it will encode/decode as TEXT.
+    Codec that encodes/decodes a Literal value to/from a compatible SQL value. If all literal
+    values share the same type, then it will use a codec for that type, otherwise it will
+    encode/decode as JSONB.
     """
 
-    origin = typing.get_origin(python_type)
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return typing.get_origin(python_type) is Literal
 
-    if origin is not Literal:
-        return
+    def __init__(self, python_type: type[PT]):
+        super().__init__(python_type)
+        self.literals = literal_values(python_type)
+        types = list({type(literal) for literal in self.literals})
+        self.codec = (
+            PostgreSQLCodec.get(types[0]) if len(types) == 1 else JSONBCodec(python_type)
+        )
+        self.is_nullable = is_optional(python_type) or None in self.literals
+        self.sql_type = self.codec.sql_type
 
-    literals = literal_values(python_type)
-    types = list({type(literal) for literal in literals})
-    codec = get_codec(types[0]) if len(types) == 1 else _jsonb_codec_provider(python_type)
-    is_nullable = is_optional(python_type) or None in literals
+    def encode(self, value: PT) -> Any:
+        if value is None:
+            return None
+        return self.codec.encode(value)
 
-    class LiteralCodec(PostgreSQLCodec[python_type]):
-
-        sql_type = codec.sql_type
-
-        @validate_arguments
-        def encode(self, value: python_type) -> Any:
-            if value is None:
-                return None
-            return codec.encode(value)
-
-        def decode(self, value: Any) -> python_type:
-            if value is None and is_nullable:
-                return None
-            result = codec.decode(value)
-            if result not in literals:
-                raise DecodeError
-            return result
-
-    return LiteralCodec()
+    def decode(self, value: Any) -> PT:
+        if value is None and self.is_nullable:
+            return None
+        result = self.codec.decode(value)
+        if result not in self.literals:
+            raise DecodeError
+        return result
 
 
-@_codec_provider
-def _jsonb_codec_provider(python_type):
+class JSONBCodec(PostgreSQLCodec[PT]):
     """
-    Provides a codec that encodes/decodes a value to/from a PostgreSQL jsonb
-    value. It unconditionally returns the codec, regardless of Python type.
-    It must be the last provider in the list to serve as a catch-all.
+    Codec that encodes/decodes a value to/from a SQL JSONB value. This is the "fallback" codec,
+    which handles any type not handled by any other codec.
     """
 
-    json_codec = fondat.codec.get_codec(JSON, python_type)
+    sql_type = "JSONB"
 
-    class JSONBCodec(PostgreSQLCodec[python_type]):
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        for other in (c for c in PostgreSQLCodec.__subclasses__() if c is not JSONBCodec):
+            if other.handles(python_type):
+                return False
+        return True
 
-        sql_type = "jsonb"
+    def __init__(self, python_type: Any):
+        super().__init__(python_type)
+        self.codec = JSONCodec.get(python_type)
 
-        @validate_arguments
-        def encode(self, value: python_type) -> str:
-            return json.dumps(json_codec.encode(value))
+    def encode(self, value: PT) -> Any:
+        return json.dumps(self.codec.encode(value))
 
-        @validate_arguments
-        def decode(self, value: str) -> python_type:
-            return json_codec.decode(json.loads(value))
-
-    return JSONBCodec()
+    def decode(self, value: Any) -> PT:
+        return self.codec.decode(json.loads(value))
 
 
 class _Results(AsyncIterator[Any]):
@@ -243,7 +205,7 @@ class _Results(AsyncIterator[Any]):
         self.result = result
         self.rows = rows
         self.codecs = {
-            k: get_codec(t)
+            k: PostgreSQLCodec.get(t)
             for k, t in typing.get_type_hints(result, include_extras=True).items()
         }
 
@@ -369,7 +331,7 @@ class Database(fondat.sql.Database):
             if isinstance(fragment, str):
                 text.append(fragment)
             else:
-                args.append(get_codec(fragment.type).encode(fragment.value))
+                args.append(PostgreSQLCodec.get(fragment.type).encode(fragment.value))
                 text.append(f"${len(args)}")
         text = "".join(text)
         conn = self._conn.get()
@@ -379,7 +341,7 @@ class Database(fondat.sql.Database):
             return _Results(statement, result, conn.cursor(text, *args).__aiter__())
 
     def sql_type(self, type: Any) -> str:
-        return get_codec(type).sql_type
+        return PostgreSQLCodec.get(type).sql_type
 
 
 class Index(fondat.sql.Index):

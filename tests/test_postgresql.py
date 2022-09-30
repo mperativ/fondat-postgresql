@@ -198,15 +198,15 @@ async def test_no_transaction(database):
 
 
 async def test_str_literal():
-    codec = postgresql.get_codec(Literal["a", "b", "c"])
-    assert codec.sql_type == "text"
+    codec = postgresql.PostgreSQLCodec.get(Literal["a", "b", "c"])
+    assert codec.sql_type == "TEXT"
 
 
 async def test_int_literal():
-    codec = postgresql.get_codec(Literal[1, 2, 3])
-    assert codec.sql_type == "bigint"
+    codec = postgresql.PostgreSQLCodec.get(Literal[1, 2, 3])
+    assert codec.sql_type == "BIGINT"
 
 
 async def test_mixed_literal():
-    codec = postgresql.get_codec(Literal["a", 1, True])
-    assert codec.sql_type == "jsonb"
+    codec = postgresql.PostgreSQLCodec.get(Literal["a", 1, True])
+    assert codec.sql_type == "JSONB"
