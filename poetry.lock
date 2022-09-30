@@ -86,7 +86,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [[package]]
 name = "coverage"
-version = "6.4.4"
+version = "6.5.0"
 description = "Code coverage measurement for Python"
 category = "dev"
 optional = false
@@ -120,7 +120,7 @@ docs = ["sphinx-autodoc-typehints (>=1.19.1)", "sphinx (>=5.1.1)", "furo (>=2022
 
 [[package]]
 name = "fondat"
-version = "4.0a11"
+version = "4.0b2"
 description = "A foundation for resource-oriented backend applications."
 category = "main"
 optional = false
@@ -128,7 +128,7 @@ python-versions = ">=3.10,<4.0"
 
 [package.dependencies]
 aiosqlite = ">=0.17,<0.18"
-iso8601 = ">=1.0,<2.0"
+iso8601 = ">=1.1,<2.0"
 multidict = ">=6.0,<7.0"
 wrapt = ">=1.14,<2.0"
 
@@ -153,7 +153,7 @@ python-versions = "*"
 
 [[package]]
 name = "iso8601"
-version = "1.0.2"
+version = "1.1.0"
 description = "Simple module to parse ISO 8601 dates"
 category = "main"
 optional = false
@@ -384,7 +384,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "83602e40fb40293271777a26af72b5eb83b02b5190d46a21101472015ecc93e0"
+content-hash = "2ad52e1d3cea181ba85dd1787a413adf2e46332914a144970c1b62989fc8bc4d"
 
 [metadata.files]
 aiosqlite = []
