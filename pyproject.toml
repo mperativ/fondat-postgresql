@@ -8,7 +8,7 @@ target-version = ['py310']
 
 [tool.poetry]
 name = "fondat-postgresql"
-version = "4.0.0"
+version = "4.0.1"
 description = "Fondat PostgreSQL module."
 readme = "README.md"
 authors = ["fondat-postgresql authors"]
