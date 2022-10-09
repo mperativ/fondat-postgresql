@@ -85,7 +85,9 @@ class ArrayCodec(PostgreSQLCodec[PT]):
         origin = get_origin(python_type) or python_type
         args = get_args(python_type)
         return (
-            is_subclass(origin, Iterable) and is_subclass(origin, cls._AVOID) and len(args) == 1
+            is_subclass(origin, Iterable)
+            and not is_subclass(origin, cls._AVOID)
+            and len(args) == 1
         )
 
     def __init__(self, python_type: Any):

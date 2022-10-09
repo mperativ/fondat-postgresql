@@ -210,3 +210,13 @@ async def test_int_literal():
 async def test_mixed_literal():
     codec = postgresql.PostgreSQLCodec.get(Literal["a", 1, True])
     assert codec.sql_type == "JSONB"
+
+
+async def test_list():
+    codec = postgresql.PostgreSQLCodec.get(list[int])
+    assert codec.sql_type == "BIGINT[]"
+
+
+async def test_set():
+    codec = postgresql.PostgreSQLCodec.get(set[str])
+    assert codec.sql_type == "TEXT[]"
