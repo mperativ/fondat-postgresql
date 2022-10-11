@@ -23,7 +23,7 @@ from fondat.sql import Expression
 from fondat.types import is_optional, is_subclass, literal_values, strip_annotations
 from fondat.validation import validate_arguments
 from types import NoneType
-from typing import Annotated, Any, Literal, TypeVar, get_args, get_origin
+from typing import Annotated, Any, Generic, Literal, TypeVar, get_args, get_origin
 from uuid import UUID
 
 
@@ -40,30 +40,8 @@ class PostgreSQLCodec(Codec[PT, Any]):
     _cache = {}
 
 
-class PassthroughCodec(PostgreSQLCodec[PT]):
+class _PassthroughCodec(Generic[PT]):
     """..."""
-
-    sql_types = {
-        str: "TEXT",
-        bool: "BOOLEAN",
-        int: "BIGINT",
-        float: "DOUBLE PRECISION",
-        bytes: "BYTEA",
-        bytearray: "BYTEA",
-        UUID: "UUID",
-        Decimal: "NUMERIC",
-        datetime: "TIMESTAMP WITH TIME ZONE",
-        date: "DATE",
-    }
-
-    @classmethod
-    def handles(cls, python_type: Any) -> bool:
-        python_type = strip_annotations(python_type)
-        return python_type in cls.sql_types.keys()
-
-    def __init__(self, python_type: Any):
-        super().__init__(python_type)
-        self.sql_type = self.sql_types[strip_annotations(python_type)]
 
     @validate_arguments
     def encode(self, value: PT) -> PT:
@@ -72,6 +50,114 @@ class PassthroughCodec(PostgreSQLCodec[PT]):
     @validate_arguments
     def decode(self, value: PT) -> PT:
         return value
+
+
+class StrCodec(_PassthroughCodec[str], PostgreSQLCodec[str]):
+
+    sql_type = "TEXT"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, str)
+
+
+class FloatCodec(_PassthroughCodec[float], PostgreSQLCodec[float]):
+
+    sql_type = "DOUBLE PRECISION"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, float)
+
+
+class DecimalCodec(_PassthroughCodec[Decimal], PostgreSQLCodec[Decimal]):
+
+    sql_type = "NUMERIC"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, Decimal)
+
+
+class BytesCodec(_PassthroughCodec[bytes], PostgreSQLCodec[bytes]):
+
+    sql_type = "BYTEA"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, bytes)
+
+
+class BytearrayCodec(_PassthroughCodec[bytearray], PostgreSQLCodec[bytearray]):
+
+    sql_type = "BYTEA"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, bytearray)
+
+    @validate_arguments
+    def decode(self, value: bytes | bytearray) -> bytearray:
+        return value if isinstance(value, bytearray) else bytearray(value)
+
+
+class IntCodec(_PassthroughCodec[int], PostgreSQLCodec[int]):
+
+    sql_type = "BIGINT"
+
+    @staticmethod
+    def handles(python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, int) and not is_subclass(python_type, bool)
+
+
+class BoolCodec(_PassthroughCodec[bool], PostgreSQLCodec[bool]):
+
+    sql_type = "BOOLEAN"
+
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, bool)
+
+    @validate_arguments
+    def decode(self, value: int | bool) -> bool:
+        return bool(value)
+
+
+class DateCodec(_PassthroughCodec[date], PostgreSQLCodec[date]):
+
+    sql_type = "DATE"
+
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, date) and not is_subclass(python_type, datetime)
+
+
+class DatetimeCodec(_PassthroughCodec[datetime], PostgreSQLCodec[datetime]):
+
+    sql_type = "TIMESTAMP WITH TIME ZONE"
+
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, datetime)
+
+
+class UUIDCodec(_PassthroughCodec[UUID], PostgreSQLCodec[UUID]):
+
+    sql_type = "UUID"
+
+    @classmethod
+    def handles(cls, python_type: Any) -> bool:
+        python_type = strip_annotations(python_type)
+        return is_subclass(python_type, UUID)
 
 
 class ArrayCodec(PostgreSQLCodec[PT]):
@@ -333,9 +419,8 @@ class Database(fondat.sql.Database):
             if isinstance(fragment, str):
                 text.append(fragment)
             else:
-                codec = PostgreSQLCodec.get(fragment.type)
-                args.append(codec.encode(fragment.value))
-                text.append(f"${len(args)}::{codec.sql_type}")
+                args.append(PostgreSQLCodec.get(fragment.type).encode(fragment.value))
+                text.append(f"${len(args)}")
         text = "".join(text)
         conn = self._conn.get()
         if result is None:

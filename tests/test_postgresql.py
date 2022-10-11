@@ -238,7 +238,10 @@ async def test_passthrough_types(database):
     )
     for value in values:
         async with database.transaction():
-            stmt = Expression(f"SELECT ", Param(value), " AS value;")
+            stmt = Expression(
+                f"SELECT ", Param(value), f"::{database.sql_type(type(value))} AS value;"
+            )
             results = await database.execute(stmt, TypedDict("TD", {"value": type(value)}))
             result = await results.__anext__()
+            assert issubclass(type(result["value"]), type(value))
             assert result["value"] == value
