@@ -333,8 +333,9 @@ class Database(fondat.sql.Database):
             if isinstance(fragment, str):
                 text.append(fragment)
             else:
-                args.append(PostgreSQLCodec.get(fragment.type).encode(fragment.value))
-                text.append(f"${len(args)}")
+                codec = PostgreSQLCodec.get(fragment.type)
+                args.append(codec.encode(fragment.value))
+                text.append(f"${len(args)}::{codec.sql_type}")
         text = "".join(text)
         conn = self._conn.get()
         if result is None:

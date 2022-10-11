@@ -5,6 +5,7 @@ import pytest
 
 from copy import copy
 from datetime import date, datetime
+from decimal import Decimal
 from fondat.data import datacls, make_datacls
 from fondat.sql import Expression, Param
 from typing import Literal, TypedDict
@@ -220,3 +221,24 @@ async def test_list():
 async def test_set():
     codec = postgresql.PostgreSQLCodec.get(set[str])
     assert codec.sql_type == "TEXT[]"
+
+
+async def test_passthrough_types(database):
+    values = (
+        True,
+        b"abc",
+        bytearray(b"123"),
+        date.fromisoformat("2022-10-10"),
+        datetime.fromisoformat("2022-10-10T10:10:10+00:00"),
+        Decimal("1.23"),
+        4.56,
+        7,
+        "text",
+        UUID("24161393-4d58-4eda-bf61-ff6c20718b15"),
+    )
+    for value in values:
+        async with database.transaction():
+            stmt = Expression(f"SELECT ", Param(value), " AS value;")
+            results = await database.execute(stmt, TypedDict("TD", {"value": type(value)}))
+            result = await results.__anext__()
+            assert result["value"] == value
