@@ -245,3 +245,19 @@ async def test_passthrough_types(database):
             result = await results.__anext__()
             assert issubclass(type(result["value"]), type(value))
             assert result["value"] == value
+
+
+async def test_upsert(table):
+    key = uuid4()
+    row = DC(
+        key=key,
+        str_="string",
+    )
+    async with table.database.transaction():
+        await table.upsert(row)
+        read = await table.read(row.key)
+        assert read.str_ == "string"
+        row.str_ = "bling"
+        await table.upsert(row)
+        read = await table.read(row.key)
+        assert read.str_ == "bling"

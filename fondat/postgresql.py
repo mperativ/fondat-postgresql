@@ -19,7 +19,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from fondat.codec import Codec, DecodeError, JSONCodec
 from fondat.data import datacls
-from fondat.sql import Expression
+from fondat.sql import Expression, Param
 from fondat.types import is_optional, is_subclass, literal_values, strip_annotations
 from fondat.validation import validate_arguments
 from types import NoneType
@@ -30,8 +30,10 @@ from uuid import UUID
 _logger = logging.getLogger(__name__)
 
 
-PT = TypeVar("PT")
-ST = TypeVar("ST")
+T = TypeVar("T")
+
+PT = TypeVar("PT")  # python type hint
+ST = TypeVar("ST")  # sql type hint
 
 
 class PostgreSQLCodec(Codec[PT, Any]):
@@ -430,6 +432,38 @@ class Database(fondat.sql.Database):
 
     def sql_type(self, type: Any) -> str:
         return PostgreSQLCodec.get(type).sql_type
+
+
+class Table(fondat.sql.Table[T]):
+    """..."""
+
+    async def upsert(self, value: T):
+        """
+        Upsert table row. Must be called within a database transaction context.
+        """
+        stmt = Expression(
+            f"INSERT INTO {self.name} (",
+            ", ".join(self.columns),
+            ") VALUES (",
+            Expression.join(
+                (
+                    Param(getattr(value, name), python_type)
+                    for name, python_type in self.columns.items()
+                ),
+                ", ",
+            ),
+            f") ON CONFLICT ({self.pk}) DO UPDATE SET ",
+            Expression.join(
+                (
+                    Expression(f"{name} = ", Param(getattr(value, name), python_type))
+                    for name, python_type in self.columns.items()
+                    if name != self.pk
+                ),
+                ", ",
+            ),
+            ";",
+        )
+        await self.database.execute(stmt)
 
 
 class Index(fondat.sql.Index):
