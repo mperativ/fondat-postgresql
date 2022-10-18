@@ -22,7 +22,7 @@ from fondat.codec import Codec, DecodeError, JSONCodec
 from fondat.data import datacls
 from fondat.sql import Expression, Param
 from fondat.types import is_optional, is_subclass, literal_values, strip_annotations
-from fondat.validation import validate_arguments
+from fondat.validation import validate, validate_arguments
 from types import NoneType
 from typing import Annotated, Any, Generic, Literal, TypeVar, get_args, get_origin
 from uuid import UUID
@@ -307,12 +307,14 @@ class _Results(AsyncIterator[T]):
         return self
 
     async def __anext__(self) -> T:
-        row = await self.rows.__anext__()
-        result = {}
+        row = await anext(self.rows)
+        build = {}
         for key in self.codecs:
             with DecodeError.path_on_error(key):
-                result[key] = self.codecs[key].decode(row[key])
-        return self.result(**result)
+                build[key] = self.codecs[key].decode(row[key])
+        result = self.result(**build)
+        validate(result, self.result)
+        return result
 
 
 # fmt: off
