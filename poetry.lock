@@ -120,7 +120,7 @@ testing = ["covdefaults (>=2.2)", "coverage (>=6.4.2)", "pytest (>=7.1.2)", "pyt
 
 [[package]]
 name = "fondat"
-version = "4.0.11"
+version = "4.0.13"
 description = "A foundation for resource-oriented backend applications."
 category = "main"
 optional = false
@@ -400,7 +400,7 @@ python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "34ac6e1359fca4e78588241444fdd1323548d758a6d772411c33b404ac723915"
+content-hash = "09437d21fd2c95ce69236b9d1bd0e67dc996ae7e3b3f024ff28df547bde459c9"
 
 [metadata.files]
 aiosqlite = [
@@ -535,8 +535,8 @@ filelock = [
     {file = "filelock-3.8.0.tar.gz", hash = "sha256:55447caa666f2198c5b6b13a26d2084d26fa5b115c00d065664b2124680c4edc"},
 ]
 fondat = [
-    {file = "fondat-4.0.11-py3-none-any.whl", hash = "sha256:f7177484112d235bf30074a4336863f6aba0d2ab8d69c761b6368e542a793754"},
-    {file = "fondat-4.0.11.tar.gz", hash = "sha256:b3f9142d22e4cb477fc66730e6dfcc360b71f94b43953eb88b447f0360a04108"},
+    {file = "fondat-4.0.13-py3-none-any.whl", hash = "sha256:4b2a819025106bf47a501d3e8cf962c298b15a0c29c117aaf40567bc8f31db37"},
+    {file = "fondat-4.0.13.tar.gz", hash = "sha256:1deaf32f83c73d5db182c24565caadcdd5e11f0eeeca0d64611aae655290ec08"},
 ]
 identify = [
     {file = "identify-2.5.6-py2.py3-none-any.whl", hash = "sha256:b276db7ec52d7e89f5bc4653380e33054ddc803d25875952ad90b0f012cbcdaa"},
