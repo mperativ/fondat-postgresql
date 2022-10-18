@@ -15,6 +15,7 @@ import uuid
 
 from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from fondat.codec import Codec, DecodeError, JSONCodec
@@ -30,10 +31,13 @@ from uuid import UUID
 _logger = logging.getLogger(__name__)
 
 
-T = TypeVar("T")
+PT = TypeVar("PT")  # python type
+ST = TypeVar("ST")  # sql type
 
-PT = TypeVar("PT")  # python type hint
-ST = TypeVar("ST")  # sql type hint
+
+T = TypeVar("T")
+R = TypeVar("R")
+PK = TypeVar("PK")
 
 
 class PostgreSQLCodec(Codec[PT, Any]):
@@ -286,7 +290,7 @@ class JSONBCodec(PostgreSQLCodec[PT]):
         return self.codec.decode(json.loads(value))
 
 
-class _Results(AsyncIterator[Any]):
+class _Results(AsyncIterator[T]):
 
     __slots__ = {"statement", "result", "rows", "codecs"}
 
@@ -302,7 +306,7 @@ class _Results(AsyncIterator[Any]):
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    async def __anext__(self) -> T:
         row = await self.rows.__anext__()
         result = {}
         for key in self.codecs:
@@ -344,7 +348,7 @@ class Database(fondat.sql.Database):
     """
 
     @classmethod
-    async def create(cls, config: Config):
+    async def new(cls, config: Config) -> "Database":
         self = cls()
         kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
         self._config = config
@@ -354,14 +358,19 @@ class Database(fondat.sql.Database):
         self._task = contextvars.ContextVar("fondat_postgresql_task", default=None)
         return self
 
-    async def close(self):
+    @classmethod
+    async def create(cls, config: Config) -> "Database":
+        """Deprecated. Use Database.new(...)."""
+        return await Database.new(config)
+
+    async def close(self) -> None:
         """Close all database connections."""
         if self._pool:
             await self._pool.close()
         self._pool = None
 
     @asynccontextmanager
-    async def connection(self) -> None:
+    async def connection(self):
         task = asyncio.current_task()
         if self._conn.get() and self._task.get() is task:
             yield  # connection already established
@@ -377,7 +386,7 @@ class Database(fondat.sql.Database):
                 self._conn.set(None)
 
     @asynccontextmanager
-    async def transaction(self) -> None:
+    async def transaction(self):
         txid = uuid.uuid4().hex
         _logger.debug("transaction begin %s", txid)
         token = self._txn.set(txid)
@@ -409,8 +418,8 @@ class Database(fondat.sql.Database):
     async def execute(
         self,
         statement: Expression,
-        result: type = None,
-    ) -> AsyncIterator[Any] | None:
+        result: type[T] = None,
+    ) -> AsyncIterator[T] | None:
         if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
         if _logger.isEnabledFor(logging.DEBUG):
@@ -434,10 +443,10 @@ class Database(fondat.sql.Database):
         return PostgreSQLCodec.get(type).sql_type
 
 
-class Table(fondat.sql.Table[T]):
+class Table(fondat.sql.Table[R, PK]):
     """..."""
 
-    async def upsert(self, value: T):
+    async def upsert(self, value: R):
         """
         Upsert table row. Must be called within a database transaction context.
         """
@@ -466,6 +475,7 @@ class Table(fondat.sql.Table[T]):
         await self.database.execute(stmt)
 
 
+@dataclass
 class Index(fondat.sql.Index):
     """
     Represents an index on a table in a PostgreSQL database.
@@ -478,24 +488,17 @@ class Index(fondat.sql.Index):
     • method: indexing method
     """
 
-    __slots__ = ("method",)
+    method: str | None = (None,)
 
-    def __init__(
-        self,
-        name: str,
-        table: fondat.sql.Table,
-        keys: Sequence[str],
-        unique: bool = False,
-        method: str | None = None,
-    ):
-        super().__init__(name, table, keys, unique)
-        self.method = method
+    async def create(self, execute: bool = True) -> Expression:
+        """
+        Generate statement to create index in database.
 
-    def __repr__(self):
-        result = f"Index(name={self.name}, table={self.table}, keys={self.keys}, unique={self.unique} method={self.method})"
+        Parameters:
+        • execute: execute statement
 
-    async def create(self):
-        """Create index in database."""
+        Statement must be executed within a database transaction context.
+        """
         stmt = Expression()
         stmt += "CREATE "
         if self.unique:
@@ -506,4 +509,6 @@ class Index(fondat.sql.Index):
         stmt += "("
         stmt += ", ".join(self.keys)
         stmt += ");"
-        await self.table.database.execute(stmt)
+        if execute:
+            await self.table.database.execute(stmt)
+        return stmt
