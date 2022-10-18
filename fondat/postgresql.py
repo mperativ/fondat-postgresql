@@ -488,7 +488,7 @@ class Index(fondat.sql.Index):
     • method: indexing method
     """
 
-    method: str | None = (None,)
+    method: str | None = None
 
     async def create(self, execute: bool = True) -> Expression:
         """
