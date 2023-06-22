@@ -35,9 +35,8 @@ PT = TypeVar("PT")  # python type
 ST = TypeVar("ST")  # sql type
 
 
+Schema = TypeVar("Schema")
 T = TypeVar("T")
-R = TypeVar("R")
-PK = TypeVar("PK")
 
 
 class PostgreSQLCodec(Codec[PT, Any]):
@@ -59,7 +58,6 @@ class _PassthroughCodec(Generic[PT]):
 
 
 class StrCodec(_PassthroughCodec[str], PostgreSQLCodec[str]):
-
     sql_type = "TEXT"
 
     @staticmethod
@@ -69,7 +67,6 @@ class StrCodec(_PassthroughCodec[str], PostgreSQLCodec[str]):
 
 
 class FloatCodec(_PassthroughCodec[float], PostgreSQLCodec[float]):
-
     sql_type = "DOUBLE PRECISION"
 
     @staticmethod
@@ -79,7 +76,6 @@ class FloatCodec(_PassthroughCodec[float], PostgreSQLCodec[float]):
 
 
 class DecimalCodec(_PassthroughCodec[Decimal], PostgreSQLCodec[Decimal]):
-
     sql_type = "NUMERIC"
 
     @staticmethod
@@ -89,7 +85,6 @@ class DecimalCodec(_PassthroughCodec[Decimal], PostgreSQLCodec[Decimal]):
 
 
 class BytesCodec(_PassthroughCodec[bytes], PostgreSQLCodec[bytes]):
-
     sql_type = "BYTEA"
 
     @staticmethod
@@ -99,7 +94,6 @@ class BytesCodec(_PassthroughCodec[bytes], PostgreSQLCodec[bytes]):
 
 
 class BytearrayCodec(_PassthroughCodec[bytearray], PostgreSQLCodec[bytearray]):
-
     sql_type = "BYTEA"
 
     @staticmethod
@@ -113,7 +107,6 @@ class BytearrayCodec(_PassthroughCodec[bytearray], PostgreSQLCodec[bytearray]):
 
 
 class IntCodec(_PassthroughCodec[int], PostgreSQLCodec[int]):
-
     sql_type = "BIGINT"
 
     @staticmethod
@@ -123,7 +116,6 @@ class IntCodec(_PassthroughCodec[int], PostgreSQLCodec[int]):
 
 
 class BoolCodec(_PassthroughCodec[bool], PostgreSQLCodec[bool]):
-
     sql_type = "BOOLEAN"
 
     @classmethod
@@ -137,7 +129,6 @@ class BoolCodec(_PassthroughCodec[bool], PostgreSQLCodec[bool]):
 
 
 class DateCodec(_PassthroughCodec[date], PostgreSQLCodec[date]):
-
     sql_type = "DATE"
 
     @classmethod
@@ -147,7 +138,6 @@ class DateCodec(_PassthroughCodec[date], PostgreSQLCodec[date]):
 
 
 class DatetimeCodec(_PassthroughCodec[datetime], PostgreSQLCodec[datetime]):
-
     sql_type = "TIMESTAMP WITH TIME ZONE"
 
     @classmethod
@@ -157,7 +147,6 @@ class DatetimeCodec(_PassthroughCodec[datetime], PostgreSQLCodec[datetime]):
 
 
 class UUIDCodec(_PassthroughCodec[UUID], PostgreSQLCodec[UUID]):
-
     sql_type = "UUID"
 
     @classmethod
@@ -291,7 +280,6 @@ class JSONBCodec(PostgreSQLCodec[PT]):
 
 
 class _Results(AsyncIterator[T]):
-
     __slots__ = {"statement", "result", "rows", "codecs"}
 
     def __init__(self, statement, result, rows):
@@ -320,6 +308,7 @@ class _Results(AsyncIterator[T]):
 # fmt: off
 @datacls
 class Config:
+    """PostgreSQL connection pool configuration."""
     dsn: Annotated[str | None, "connection arguments in libpg connection URI format"]
     min_size: Annotated[int | None, "number of connections to initialize pool with"]
     max_size: Annotated[int | None, "maximum number of connections in the pool"]
@@ -345,50 +334,72 @@ class Database(fondat.sql.Database):
     """
     Manages access to a PostgreSQL database.
 
-    Supplied configuration can be a Config dataclass instance, or a function or coroutine
-    function that returns a Config dataclass instance.
+    Parameters:
+    • config: connection pool configuration
+
+    The connection pool will be initialized on the first connection request, or it can be
+    explicitly initialized using the `init` method.
     """
 
-    @classmethod
-    async def new(cls, config: Config) -> "Database":
-        self = cls()
-        kwargs = {k: v for k, v in dataclasses.asdict(config).items() if v is not None}
+    def __init__(self, config: Config):
         self._config = config
-        self._pool = await asyncpg.create_pool(**kwargs)
         self._conn = contextvars.ContextVar("fondat_postgresql_conn", default=None)
         self._txn = contextvars.ContextVar("fondat_postgresql_txn", default=None)
         self._task = contextvars.ContextVar("fondat_postgresql_task", default=None)
+        self._pool = None
+
+    @classmethod
+    async def new(cls, config: Config) -> "Database":
+        """Deprecated."""
+        self = cls(config)
+        await self.init()
         return self
 
     @classmethod
     async def create(cls, config: Config) -> "Database":
-        """Deprecated. Use Database.new(...)."""
-        return await Database.new(config)
+        """Deprecated."""
+        self = cls(config)
+        await self.init()
+        return self
+
+    async def init(self) -> None:
+        """Create database connection pool."""
+        if not self._pool:
+            _logger.debug("create connection pool")
+            self._pool = await asyncpg.create_pool(
+                **{k: v for k, v in dataclasses.asdict(self._config).items() if v is not None}
+            )
 
     async def close(self) -> None:
-        """Close all database connections."""
+        """Close database connection pool."""
         if self._pool:
             await self._pool.close()
         self._pool = None
 
     @asynccontextmanager
-    async def connection(self):
+    async def connection(self) -> AsyncIterator[None]:
         task = asyncio.current_task()
         if self._conn.get() and self._task.get() is task:
             yield  # connection already established
             return
-        _logger.debug("open connection")
+        await self.init()
+        _logger.debug("acquire connection from pool")
         self._task.set(task)
         async with self._pool.acquire(timeout=self._config.timeout) as connection:
             self._conn.set(connection)
             try:
                 yield
             finally:
-                _logger.debug("close connection")
+                _logger.debug("release connection to pool")
                 self._conn.set(None)
 
     @asynccontextmanager
-    async def transaction(self):
+    async def transaction(self) -> AsyncIterator[None]:
+        """
+        Return an asynchronous context manager, which scopes a transaction in which
+        statement(s) are executed. Upon exit of the context, if an exception was raised,
+        changes will be rolled back; otherwise changes will be committed.
+        """
         txid = uuid.uuid4().hex
         _logger.debug("transaction begin %s", txid)
         token = self._txn.set(txid)
@@ -422,6 +433,19 @@ class Database(fondat.sql.Database):
         statement: Expression,
         result: type[T] = None,
     ) -> AsyncIterator[T] | None:
+        """
+        Execute a SQL statement.
+
+        Parameters:
+        • statement: SQL statement to excute
+        • result: the type to return a query result row
+
+        If the statement is a query that generates results, each row can be returned in
+        a dataclass or TypedDict object, whose type is specifed in the `result` parameter.
+        Rows are provided via a returned asynchronous iterator.
+
+        Must be called within a database transaction context.
+        """
         if not self._txn.get():
             raise RuntimeError("transaction context required to execute statement")
         if _logger.isEnabledFor(logging.DEBUG):
@@ -438,17 +462,18 @@ class Database(fondat.sql.Database):
         conn = self._conn.get()
         if result is None:
             await conn.execute(text, *args)
-        else:  # expecting a result
+        else:  # expecting results
             return _Results(statement, result, conn.cursor(text, *args).__aiter__())
 
     def sql_type(self, type: Any) -> str:
+        """Return the SQL type string that corresponds with the specified Python type."""
         return PostgreSQLCodec.get(type).sql_type
 
 
-class Table(fondat.sql.Table[R, PK]):
+class Table(fondat.sql.Table[Schema]):
     """..."""
 
-    async def upsert(self, value: R):
+    async def upsert(self, value: Schema):
         """
         Upsert table row. Must be called within a database transaction context.
         """
