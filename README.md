@@ -21,3 +21,9 @@ poetry run pre-commit install
 ```
 poetry run pytest
 ```
+
+### Setup
+
+Need running PostgreSQL DB
+* database: fondat
+* username/password: fondat/fondat
