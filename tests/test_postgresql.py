@@ -34,6 +34,8 @@ config = postgresql.Config(
     database="fondat",
     user="fondat",
     password="fondat",
+    port=5432,
+    host="localhost",
 )
 
 
